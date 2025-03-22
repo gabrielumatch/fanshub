@@ -1,0 +1,127 @@
+{% extends 'base.html' %} 
+{% block title %}FansHub - Connect withCreators
+{% endblock %} 
+{% block content %}
+<div class="row">
+  <div class="col-lg-6 mt-5">
+    <h1 class="display-4">Connect with your favorite creators</h1>
+    <p class="lead">
+      Subscribe to creators, access exclusive content, and support your
+      favorites directly.
+    </p>
+    <div class="mt-4">
+      <a href="{% url 'register' %}" class="btn btn-primary btn-lg">Join Now</a>
+      <a
+        href="{% url 'discover' %}"
+        class="btn btn-outline-secondary btn-lg ms-2"
+        >Discover Creators</a
+      >
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <img
+      src="https://images.unsplash.com/photo-1529156069898-49953e39b3ac?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=2089&q=80"
+      class="img-fluid rounded shadow-lg"
+      alt="People connecting"
+    />
+  </div>
+</div>
+
+{% if featured_creators %}
+<div class="mt-5">
+  <h2 class="mb-4">Featured Creators</h2>
+  <div class="row">
+    {% for creator in featured_creators %}
+    <div class="col-md-4 mb-4">
+      <div class="card creator-card h-100">
+        <div class="position-relative">
+          {% if creator.cover_photo %}
+          <img
+            src="{{ creator.cover_photo.url }}"
+            class="card-img-top"
+            style="height: 120px; object-fit: cover"
+            alt="{{ creator.username }}"
+          />
+          {% else %}
+          <div class="bg-light" style="height: 120px"></div>
+          {% endif %}
+          <div class="position-absolute" style="bottom: -30px; left: 20px">
+            {% if creator.profile_picture %}
+            <img
+              src="{{ creator.profile_picture.url }}"
+              class="avatar-medium border border-white border-3"
+              alt="{{ creator.username }}"
+            />
+            {% else %}
+            <div
+              class="bg-secondary avatar-medium text-white d-flex align-items-center justify-content-center"
+            >
+              {{ creator.username|first|upper }}
+            </div>
+            {% endif %}
+          </div>
+        </div>
+        <div class="card-body pt-4 mt-2">
+          <h5 class="card-title">{{ creator.username }}</h5>
+          <p class="card-text text-muted">
+            {% if creator.bio %} {{ creator.bio|truncatechars:80 }} {% else %}
+            This creator hasn't added a bio yet. {% endif %}
+          </p>
+          <a
+            href="{% url 'creator_profile' creator.username %}"
+            class="stretched-link"
+          ></a>
+        </div>
+        <div class="card-footer bg-white">
+          <div class="d-flex justify-content-between align-items-center">
+            <span>${{ creator.subscription_price }}/month</span>
+            <span class="badge bg-light text-dark">Creator</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<div class="mt-5 p-5 bg-light rounded-3">
+  <div class="container-fluid py-3">
+    <h2 class="display-6 fw-bold">Why join FansHub?</h2>
+    <div class="row mt-4">
+      <div class="col-md-4 mb-3">
+        <div class="card h-100 border-0 shadow-sm">
+          <div class="card-body">
+            <h5 class="card-title">Support Creators</h5>
+            <p class="card-text">
+              Your subscription goes directly to the creators you love, helping
+              them continue making great content.
+            </p>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4 mb-3">
+        <div class="card h-100 border-0 shadow-sm">
+          <div class="card-body">
+            <h5 class="card-title">Exclusive Content</h5>
+            <p class="card-text">
+              Get access to exclusive content not available anywhere else.
+            </p>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4 mb-3">
+        <div class="card h-100 border-0 shadow-sm">
+          <div class="card-body">
+            <h5 class="card-title">Direct Connection</h5>
+            <p class="card-text">
+              Connect directly with your favorite creators and join their
+              community.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

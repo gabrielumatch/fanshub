@@ -1,0 +1,66 @@
+{% extends 'base.html' %} 
+{% block title %}FansHub - Discover Creators
+{%endblock %} {% block content %}
+<div class="container py-4">
+  <h1 class="mb-4">Discover Creators</h1>
+
+  {% if creators %}
+  <div class="row">
+    {% for creator in creators %}
+    <div class="col-md-4 mb-4">
+      <div class="card creator-card h-100">
+        <div class="position-relative">
+          {% if creator.cover_photo %}
+          <img
+            src="{{ creator.cover_photo.url }}"
+            class="card-img-top"
+            style="height: 120px; object-fit: cover"
+            alt="{{ creator.username }}"
+          />
+          {% else %}
+          <div class="bg-light" style="height: 120px"></div>
+          {% endif %}
+          <div class="position-absolute" style="bottom: -30px; left: 20px">
+            {% if creator.profile_picture %}
+            <img
+              src="{{ creator.profile_picture.url }}"
+              class="avatar-medium border border-white border-3"
+              alt="{{ creator.username }}"
+            />
+            {% else %}
+            <div
+              class="bg-secondary avatar-medium text-white d-flex align-items-center justify-content-center"
+            >
+              {{ creator.username|first|upper }}
+            </div>
+            {% endif %}
+          </div>
+        </div>
+        <div class="card-body pt-4 mt-2">
+          <h5 class="card-title">{{ creator.username }}</h5>
+          <p class="card-text text-muted">
+            {% if creator.bio %} {{ creator.bio|truncatechars:80 }} {% else %}
+            This creator hasn't added a bio yet. {% endif %}
+          </p>
+          <a
+            href="{% url 'creator_profile' creator.username %}"
+            class="stretched-link"
+          ></a>
+        </div>
+        <div class="card-footer bg-white">
+          <div class="d-flex justify-content-between align-items-center">
+            <span>${{ creator.subscription_price }}/month</span>
+            <span class="badge bg-light text-dark">Creator</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="alert alert-info">
+    No creators found at this time. Check back later!
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
