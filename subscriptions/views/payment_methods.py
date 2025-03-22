@@ -4,6 +4,7 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from django.views.decorators.csrf import csrf_exempt
 from django.conf import settings
+from django.core.exceptions import ValidationError
 import stripe
 import json
 from subscriptions.models import SavedPaymentMethod
@@ -50,29 +51,44 @@ def save_payment_method(request):
                     'message': str(e)
                 }, status=400)
         
-        # Create a new saved payment method
-        saved_method = SavedPaymentMethod.objects.create(
+        # Check if this payment method already exists for this user
+        if SavedPaymentMethod.objects.filter(
             user=request.user,
-            stripe_payment_method_id=payment_method_id,
-            last4=payment_method.card.last4,
-            brand=payment_method.card.brand,
-            exp_month=payment_method.card.exp_month,
-            exp_year=payment_method.card.exp_year,
-            is_default=not SavedPaymentMethod.objects.filter(user=request.user).exists()
-        )
+            stripe_payment_method_id=payment_method_id
+        ).exists():
+            return JsonResponse({
+                'success': False,
+                'message': 'This payment method has already been saved'
+            }, status=400)
         
-        return JsonResponse({
-            'success': True,
-            'message': 'Payment method saved successfully',
-            'payment_method': {
-                'id': saved_method.id,
-                'last4': saved_method.last4,
-                'brand': saved_method.brand,
-                'exp_month': saved_method.exp_month,
-                'exp_year': saved_method.exp_year,
-                'is_default': saved_method.is_default
-            }
-        })
+        try:
+            # Create a new saved payment method
+            saved_method = SavedPaymentMethod.objects.create(
+                user=request.user,
+                stripe_payment_method_id=payment_method_id,
+                last4=payment_method.card.last4,
+                brand=payment_method.card.brand,
+                exp_month=payment_method.card.exp_month,
+                exp_year=payment_method.card.exp_year
+            )
+            
+            return JsonResponse({
+                'success': True,
+                'message': 'Payment method saved successfully',
+                'payment_method': {
+                    'id': saved_method.id,
+                    'last4': saved_method.last4,
+                    'brand': saved_method.brand,
+                    'exp_month': saved_method.exp_month,
+                    'exp_year': saved_method.exp_year,
+                    'is_default': saved_method.is_default
+                }
+            })
+        except ValidationError as e:
+            return JsonResponse({
+                'success': False,
+                'message': str(e)
+            }, status=400)
     except json.JSONDecodeError:
         return JsonResponse({
             'success': False,

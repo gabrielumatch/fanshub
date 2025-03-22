@@ -1,6 +1,8 @@
 from django.db import models
 from django.conf import settings
 from django.utils.translation import gettext_lazy as _
+from django.core.exceptions import ValidationError
+from datetime import datetime
 
 class Subscription(models.Model):
     """
@@ -94,7 +96,7 @@ class SavedPaymentMethod(models.Model):
     Model to store user's saved payment methods
     """
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='saved_payment_methods')
-    stripe_payment_method_id = models.CharField(max_length=255)
+    stripe_payment_method_id = models.CharField(max_length=255, unique=True)
     last4 = models.CharField(max_length=4)
     brand = models.CharField(max_length=50)  # visa, mastercard, etc.
     exp_month = models.IntegerField()
@@ -109,9 +111,37 @@ class SavedPaymentMethod(models.Model):
         ordering = ['-is_default', '-created_at']
 
     def __str__(self):
-        return f"{self.user.username}'s {self.brand} card ending in {self.last4}"
+        return f"visa **** {self.last4}"
+
+    def get_card_display(self):
+        return f"{self.brand} **** {self.last4}"
+
+    def clean(self):
+        """
+        Validate the model fields
+        """
+        # Validate expiration date
+        now = datetime.now()
+        if self.exp_year < now.year or (self.exp_year == now.year and self.exp_month < now.month):
+            raise ValidationError('Card has expired')
+
+        # Validate month
+        if not 1 <= self.exp_month <= 12:
+            raise ValidationError('Invalid expiration month')
+
+        # Validate year
+        if self.exp_year < 2000 or self.exp_year > 2100:
+            raise ValidationError('Invalid expiration year')
+
+        # Validate last4
+        if not self.last4.isdigit() or len(self.last4) != 4:
+            raise ValidationError('Invalid card number')
 
     def save(self, *args, **kwargs):
+        self.full_clean()
+        # If this is the first payment method for the user, set it as default
+        if not SavedPaymentMethod.objects.filter(user=self.user).exists():
+            self.is_default = True
         # If this is set as default, unset any other default payment methods
         if self.is_default:
             SavedPaymentMethod.objects.filter(
@@ -119,3 +149,32 @@ class SavedPaymentMethod(models.Model):
                 is_default=True
             ).exclude(pk=self.pk).update(is_default=False)
         super().save(*args, **kwargs)
+
+    def is_expired(self, current_year=None, current_month=None):
+        """
+        Check if the payment method is expired
+        """
+        if current_year is None or current_month is None:
+            now = datetime.now()
+            current_year = now.year
+            current_month = now.month
+        
+        if self.exp_year < current_year:
+            return True
+        if self.exp_year == current_year and self.exp_month < current_month:
+            return True
+        return False
+
+    def delete(self, *args, **kwargs):
+        """
+        When deleting a default payment method, set another one as default if available
+        """
+        if self.is_default:
+            # Get another payment method to set as default
+            other_payment_method = SavedPaymentMethod.objects.filter(
+                user=self.user
+            ).exclude(pk=self.pk).first()
+            if other_payment_method:
+                other_payment_method.is_default = True
+                other_payment_method.save()
+        super().delete(*args, **kwargs)
