@@ -34,20 +34,16 @@
           <p class="card-text">{{ post.text }}</p>
 
           <!-- Post Media -->
-          {% if post.media.all %}
+          {% if post.media_files.first %}
           <div class="mt-3">
-            {% for media in post.media.all %}
-            <div class="mb-3">
-              {% if media.media_type == 'image' %}
-              <img src="{{ media.file.url }}" alt="Post media" class="img-fluid rounded">
-              {% elif media.media_type == 'video' %}
-              <video controls class="w-100 rounded">
-                <source src="{{ media.file.url }}" type="video/mp4">
-                Your browser does not support the video tag.
-              </video>
-              {% endif %}
-            </div>
-            {% endfor %}
+            {% if post.media_files.first.media_type == 'image' %}
+            <img src="{{ post.media_files.first.file.url }}" alt="Post media" class="img-fluid rounded post-media">
+            {% elif post.media_files.first.media_type == 'video' %}
+            <video controls class="w-100 rounded post-media">
+              <source src="{{ post.media_files.first.file.url }}" type="video/mp4">
+              Your browser does not support the video tag.
+            </video>
+            {% endif %}
           </div>
           {% endif %}
           {% else %}
@@ -140,6 +136,16 @@
     </div>
   </div>
 </div>
+
+<style>
+.post-media {
+  width: 100%;
+  max-height: 500px;
+  object-fit: contain;
+  border-radius: 8px;
+  background-color: #f8f9fa;
+}
+</style>
 {% endblock %}
 
 {% block extra_js %}

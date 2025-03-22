@@ -5,7 +5,7 @@ from django.utils.translation import gettext_lazy as _
 from django.http import JsonResponse
 from django.urls import reverse
 
-from .models import Post, Media
+from .models import Post, Media, Like
 from .forms import PostForm, MediaFormSet
 from accounts.models import User
 from subscriptions.models import Subscription
@@ -207,3 +207,40 @@ def creator_profile(request, username):
         'is_subscribed': is_subscribed,
     }
     return render(request, 'accounts/creator_profile.html', context)
+
+@login_required
+def like_post(request, post_id):
+    """Like or unlike a post"""
+    post = get_object_or_404(Post, id=post_id)
+    
+    # Check if user can view this post
+    if post.visibility in ['subscribers', 'premium']:
+        if request.user != post.creator:
+            is_subscribed = Subscription.objects.filter(
+                subscriber=request.user,
+                creator=post.creator,
+                active=True
+            ).exists()
+            if not is_subscribed:
+                return JsonResponse({
+                    'success': False,
+                    'message': _('You need to be subscribed to like this post.')
+                }, status=403)
+    
+    # Toggle like
+    like, created = Like.objects.get_or_create(
+        user=request.user,
+        post=post
+    )
+    
+    if not created:
+        like.delete()
+        is_liked = False
+    else:
+        is_liked = True
+    
+    return JsonResponse({
+        'success': True,
+        'is_liked': is_liked,
+        'likes_count': post.likes.count()
+    })

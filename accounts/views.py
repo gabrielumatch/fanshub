@@ -48,15 +48,35 @@ def user_login(request):
 
 @login_required
 def profile(request):
-    """Display user profile"""
-    user_posts = Post.objects.filter(creator=request.user).order_by('-created_at')
-    subscriptions = Subscription.objects.filter(subscriber=request.user, active=True)
+    """User profile view"""
+    user = request.user
+    user_posts = Post.objects.filter(creator=user).order_by('-created_at')
+    subscriptions = Subscription.objects.filter(subscriber=user)
+    
+    # Debug print statements
+    print(f"User: {user.username}")
+    print(f"Is creator: {user.is_creator}")
+    print(f"Number of posts: {user_posts.count()}")
+    for post in user_posts:
+        print(f"Post ID: {post.id}")
+        print(f"Post Title: {post.title}")
+        print(f"Post Text: {post.text[:20]}...")
+        print(f"Post Visibility: {post.visibility}")
+        print(f"Post Created At: {post.created_at}")
+        print("---")
+    print(f"Number of subscriptions: {subscriptions.count()}")
     
     context = {
-        'user': request.user,
+        'user': user,
         'user_posts': user_posts,
         'subscriptions': subscriptions,
     }
+    
+    print("\nContext being passed to template:")
+    print(f"user: {context['user'].username}")
+    print(f"user_posts count: {len(context['user_posts'])}")
+    print(f"subscriptions count: {len(context['subscriptions'])}")
+    
     return render(request, 'accounts/profile.html', context)
 
 @login_required
