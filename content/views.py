@@ -193,3 +193,17 @@ def add_comment(request, post_id):
             messages.error(request, _('Comment content cannot be empty.'))
     
     return redirect('post_detail', post_id=post.id)
+
+def creator_profile(request, username):
+    creator = get_object_or_404(User, username=username)
+    posts = Post.objects.filter(creator=creator, visibility='public').order_by('-created_at')
+    is_subscribed = False
+    if request.user.is_authenticated:
+        is_subscribed = Subscription.objects.filter(subscriber=request.user, creator=creator, status='active').exists()
+    
+    context = {
+        'creator': creator,
+        'posts': posts,
+        'is_subscribed': is_subscribed,
+    }
+    return render(request, 'accounts/creator_profile.html', context)

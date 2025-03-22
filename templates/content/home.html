@@ -105,7 +105,7 @@
               {{ post.created_at|date:"F j, Y, g:i a" }}
             </div>
           </div>
-          {% if post.is_paid %}
+          {% if post.visibility == 'premium' %}
           <span class="badge bg-info ms-auto">Premium</span>
           {% endif %}
         </div>

@@ -75,7 +75,7 @@
                     {{ post.created_at|date:"F j, Y, g:i a" }}
                   </div>
                 </div>
-                {% if post.is_paid %}
+                {% if post.visibility == 'premium' %}
                 <span class="badge bg-info ms-auto">Premium</span>
                 {% endif %}
               </div>
@@ -124,7 +124,7 @@
                       <i class="fas fa-lock fa-2x mb-2"></i>
                       <p class="mb-2">This is premium content</p>
                       <a
-                        href="{% url 'subscribe' creator.username %}"
+                        href="{% url 'subscriptions:subscribe' creator.username %}"
                         class="btn btn-primary"
                         >Subscribe for ${{ creator.subscription_price
                         }}/month</a
@@ -173,13 +173,13 @@
               {{ subscription.expires_at|date:"F j, Y" }}
             </div>
             <a
-              href="{% url 'cancel_subscription' creator.username %}"
+              href="{% url 'subscriptions:cancel_subscription' creator.username %}"
               class="btn btn-outline-danger w-100"
               >Cancel Subscription</a
             >
             {% else %}
             <a
-              href="{% url 'subscribe' creator.username %}"
+              href="{% url 'subscriptions:subscribe' creator.username %}"
               class="btn btn-primary w-100"
               >Subscribe Now</a
             >

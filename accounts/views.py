@@ -151,27 +151,36 @@ def creator_profile(request, username):
     """View a creator's public profile"""
     creator = get_object_or_404(User, username=username, is_creator=True)
     is_subscribed = False
+    subscription = None
     
     # Check if the user is subscribed to this creator
     if request.user.is_authenticated:
-        is_subscribed = Subscription.objects.filter(
+        subscription = Subscription.objects.filter(
             subscriber=request.user, 
             creator=creator, 
             active=True
-        ).exists()
+        ).first()
+        is_subscribed = subscription is not None
     
     # Get creator's posts
     if is_subscribed or request.user == creator:
         # Show all posts for subscribers or the creator themselves
         posts = Post.objects.filter(creator=creator).order_by('-created_at')
     else:
-        # Show only free posts for non-subscribers
-        posts = Post.objects.filter(creator=creator, is_paid=False).order_by('-created_at')
+        # Show only public posts for non-subscribers
+        posts = Post.objects.filter(creator=creator, visibility='public').order_by('-created_at')
+    
+    # Get creator stats
+    posts_count = Post.objects.filter(creator=creator).count()
+    subscribers_count = Subscription.objects.filter(creator=creator, active=True).count()
     
     context = {
         'creator': creator,
         'posts': posts,
         'is_subscribed': is_subscribed,
+        'subscription': subscription,
+        'posts_count': posts_count,
+        'subscribers_count': subscribers_count,
     }
     return render(request, 'accounts/creator_profile.html', context)
 

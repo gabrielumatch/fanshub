@@ -123,27 +123,35 @@
               </a>
               <ul class="dropdown-menu dropdown-menu-end">
                 <li>
-                  <a class="dropdown-item" href="{% url 'profile' %}">My Profile</a>
+                  <a class="dropdown-item" href="{% url 'profile' %}">
+                    <i class="bi bi-person me-2"></i>My Profile
+                  </a>
                 </li>
                 {% if user.is_creator %}
                 <li>
-                  <a class="dropdown-item" href="{% url 'creator_dashboard' %}"
-                    >Creator Dashboard</a
-                  >
+                  <a class="dropdown-item" href="{% url 'creator_dashboard' %}">
+                    <i class="bi bi-speedometer2 me-2"></i>Creator Dashboard
+                  </a>
                 </li>
                 {% else %}
                 <li>
-                  <a class="dropdown-item" href="{% url 'become_creator' %}"
-                    >Become a Creator</a
-                  >
+                  <a class="dropdown-item" href="{% url 'become_creator' %}">
+                    <i class="bi bi-plus-circle me-2"></i>Become a Creator
+                  </a>
                 </li>
                 {% endif %}
-                <li><a class="dropdown-item" href="/settings/">Settings</a></li>
+                <li>
+                  <a class="dropdown-item" href="/settings/">
+                    <i class="bi bi-gear me-2"></i>Settings
+                  </a>
+                </li>
                 <li><hr class="dropdown-divider" /></li>
                 <li>
-                  <form method="post" action="{% url 'logout' %}" class="d-inline">
+                  <form id="logoutForm" method="post" action="{% url 'logout' %}" class="d-inline">
                     {% csrf_token %}
-                    <button type="submit" class="dropdown-item">Logout</button>
+                    <button type="button" class="dropdown-item" onclick="submitLogout()">
+                      <i class="bi bi-box-arrow-right me-2"></i>Logout
+                    </button>
                   </form>
                 </li>
               </ul>
@@ -187,6 +195,11 @@
       </div>
     </footer>
 
+    <script>
+    function submitLogout() {
+      document.getElementById('logoutForm').submit();
+    }
+    </script>
     {% block extra_js %}{% endblock %}
   </body>
 </html>
