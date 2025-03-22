@@ -1,0 +1,187 @@
+{% extends 'base.html' %} 
+
+{% block title %}My Profile - FansHub{% endblock %} 
+
+{% block content %}
+<div class="row">
+  <div class="col-md-4">
+    <div class="card mb-4">
+      <div class="card-body text-center">
+        {% if user.profile_picture %}
+        <img
+          src="{{ user.profile_picture.url }}"
+          class="avatar-large mb-3"
+          alt="{{ user.username }}"
+        />
+        {% else %}
+        <div
+          class="bg-secondary avatar-large text-white d-flex align-items-center justify-content-center mx-auto mb-3"
+        >
+          {{ user.username|first|upper }}
+        </div>
+        {% endif %}
+        <h4 class="mb-1">{{ user.username }}</h4>
+        <p class="text-muted mb-3">{{ user.email }}</p>
+        <a href="{% url 'edit_profile' %}" class="btn btn-outline-primary">Edit Profile</a>
+      </div>
+    </div>
+
+    <div class="card mb-4">
+      <div class="card-header bg-white">
+        <h5 class="mb-0">Account Info</h5>
+      </div>
+      <div class="card-body">
+        <ul class="list-group list-group-flush">
+          <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+            Member Since
+            <span>{{ user.date_joined|date:"F Y" }}</span>
+          </li>
+          {% if user.is_creator %}
+          <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+            Account Type
+            <span class="badge bg-primary">Creator</span>
+          </li>
+          <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+            Subscription Price
+            <span>${{ user.subscription_price }}/month</span>
+          </li>
+          {% else %}
+          <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+            Account Type
+            <span class="badge bg-secondary">Fan</span>
+          </li>
+          {% endif %}
+        </ul>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header bg-white">
+        <h5 class="mb-0">Your Subscriptions</h5>
+      </div>
+      <div class="card-body">
+        <ul class="list-group list-group-flush">
+          {% for subscription in subscriptions %}
+          <li class="list-group-item d-flex align-items-center px-0">
+            {% if subscription.creator.profile_picture %}
+            <img
+              src="{{ subscription.creator.profile_picture.url }}"
+              class="avatar-small me-2"
+              alt="{{ subscription.creator.username }}"
+            />
+            {% else %}
+            <div
+              class="bg-secondary avatar-small text-white d-flex align-items-center justify-content-center me-2"
+            >
+              {{ subscription.creator.username|first|upper }}
+            </div>
+            {% endif %}
+            <div>
+              <a
+                href="{% url 'creator_profile' subscription.creator.username %}"
+                class="text-decoration-none text-dark"
+                >{{ subscription.creator.username }}</a
+              >
+              <div class="text-muted small">
+                Expires: {{ subscription.expires_at|date:"F j, Y" }}
+              </div>
+            </div>
+          </li>
+          {% empty %}
+          <li class="list-group-item text-center py-3">
+            No active subscriptions
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+      <div class="card-footer bg-white text-center">
+        <a href="{% url 'discover' %}" class="btn btn-outline-primary btn-sm"
+          >Discover More Creators</a
+        >
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-8">
+    <div class="card">
+      <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">Your Posts</h5>
+        {% if user.is_creator %}
+        <a href="{% url 'create_post' %}" class="btn btn-primary btn-sm">Create Post</a>
+        {% endif %}
+      </div>
+      <div class="card-body">
+        {% if user_posts %}
+          {% for post in user_posts %}
+          <div class="card mb-4">
+            <div class="card-header bg-white">
+              <div class="d-flex align-items-center">
+                {% if user.profile_picture %}
+                <img
+                  src="{{ user.profile_picture.url }}"
+                  class="avatar-small me-2"
+                  alt="{{ user.username }}"
+                />
+                {% else %}
+                <div
+                  class="bg-secondary avatar-small text-white d-flex align-items-center justify-content-center me-2"
+                >
+                  {{ user.username|first|upper }}
+                </div>
+                {% endif %}
+                <div>
+                  <span class="fw-bold">{{ user.username }}</span>
+                  <div class="text-muted small">
+                    {{ post.created_at|date:"F j, Y, g:i a" }}
+                  </div>
+                </div>
+                {% if post.is_paid %}
+                <span class="badge bg-info ms-auto">Premium</span>
+                {% endif %}
+              </div>
+            </div>
+            <div class="card-body">
+              <p class="card-text">{{ post.text }}</p>
+              {% if post.media.all %}
+              <div class="mt-3">
+                {% for media in post.media.all %}
+                <div class="mb-3">
+                  {% if media.media_type == 'image' %}
+                  <img
+                    src="{{ media.file.url }}"
+                    class="post-media img-fluid"
+                    alt="Post image"
+                  />
+                  {% elif media.media_type == 'video' %}
+                  <video controls class="post-media w-100">
+                    <source src="{{ media.file.url }}" type="video/mp4" />
+                    Your browser does not support the video tag.
+                  </video>
+                  {% endif %}
+                </div>
+                {% endfor %}
+              </div>
+              {% endif %}
+            </div>
+            <div class="card-footer bg-white">
+              <div class="d-flex justify-content-between">
+                <a href="{% url 'post_detail' post.id %}" class="text-decoration-none"
+                  >View Post</a
+                >
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+        {% else %}
+          <div class="text-center py-5">
+            <p class="text-muted">You haven't created any posts yet.</p>
+            {% if user.is_creator %}
+            <a href="{% url 'create_post' %}" class="btn btn-primary">Create Your First Post</a>
+            {% endif %}
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %} 

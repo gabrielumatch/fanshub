@@ -1,0 +1,99 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Subscribe to {{ creator.username }} - FansHub{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="mb-0">Subscribe to {{ creator.username }}</h4>
+                </div>
+                <div class="card-body">
+                    <div class="text-center mb-4">
+                        <img src="{{ creator.profile_picture.url }}" alt="{{ creator.username }}" class="rounded-circle mb-3" style="width: 100px; height: 100px; object-fit: cover;">
+                        <h5>{{ creator.username }}</h5>
+                        <p class="text-muted">Monthly subscription: ${{ creator.subscription_price }}</p>
+                    </div>
+
+                    <form id="payment-form">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label for="card-element" class="form-label">Credit or debit card</label>
+                            <div id="card-element" class="form-control" style="height: 40px; padding-top: 10px;"></div>
+                            <div id="card-errors" class="invalid-feedback" role="alert"></div>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary w-100" id="submit-button">
+                            <span id="button-text">Subscribe Now</span>
+                            <div id="spinner" class="spinner-border spinner-border-sm d-none" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://js.stripe.com/v3/"></script>
+<script>
+    const stripe = Stripe('{{ stripe_public_key }}');
+    const elements = stripe.elements();
+    const card = elements.create('card');
+    card.mount('#card-element');
+
+    const form = document.getElementById('payment-form');
+    const submitButton = document.getElementById('submit-button');
+    const spinner = document.getElementById('spinner');
+    const buttonText = document.getElementById('button-text');
+
+    card.on('change', function(event) {
+        const displayError = document.getElementById('card-errors');
+        if (event.error) {
+            displayError.textContent = event.error.message;
+            displayError.style.display = 'block';
+        } else {
+            displayError.textContent = '';
+            displayError.style.display = 'none';
+        }
+    });
+
+    form.addEventListener('submit', async function(event) {
+        event.preventDefault();
+        
+        submitButton.disabled = true;
+        spinner.classList.remove('d-none');
+        buttonText.textContent = 'Processing...';
+
+        const {error, paymentIntent} = await stripe.confirmCardPayment(
+            '{{ client_secret }}',
+            {
+                payment_method: {
+                    card: card,
+                    billing_details: {
+                        name: '{{ request.user.get_full_name }}',
+                    },
+                },
+            }
+        );
+
+        if (error) {
+            const errorElement = document.getElementById('card-errors');
+            errorElement.textContent = error.message;
+            errorElement.style.display = 'block';
+            submitButton.disabled = false;
+            spinner.classList.add('d-none');
+            buttonText.textContent = 'Subscribe Now';
+        } else {
+            // Payment successful
+            window.location.href = "{% url 'subscription_confirmation' creator.username %}";
+        }
+    });
+</script>
+{% endblock %} 

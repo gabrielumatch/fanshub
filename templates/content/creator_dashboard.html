@@ -1,0 +1,207 @@
+{% extends 'base.html' %}
+
+{% block title %}Creator Dashboard - FansHub{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+  <div class="row">
+    <!-- Sidebar -->
+    <div class="col-md-3 col-lg-2 d-md-block bg-light sidebar collapse">
+      <div class="position-sticky pt-3">
+        <ul class="nav flex-column">
+          <li class="nav-item">
+            <a class="nav-link active" href="#overview">
+              <i class="bi bi-speedometer2"></i> Overview
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="#content">
+              <i class="bi bi-file-earmark-text"></i> Content
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="#subscribers">
+              <i class="bi bi-people"></i> Subscribers
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="#earnings">
+              <i class="bi bi-cash"></i> Earnings
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="#settings">
+              <i class="bi bi-gear"></i> Settings
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Main content -->
+    <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
+      <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2">Creator Dashboard</h1>
+        <div class="btn-toolbar mb-2 mb-md-0">
+          <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createPostModal">
+            <i class="bi bi-plus-lg"></i> Create Post
+          </button>
+        </div>
+      </div>
+
+      <!-- Stats Cards -->
+      <div class="row mb-4">
+        <div class="col-md-3">
+          <div class="card text-white bg-primary">
+            <div class="card-body">
+              <h5 class="card-title">Total Subscribers</h5>
+              <p class="card-text display-6">{{ total_subscribers }}</p>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="card text-white bg-success">
+            <div class="card-body">
+              <h5 class="card-title">Monthly Revenue</h5>
+              <p class="card-text display-6">${{ monthly_revenue }}</p>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="card text-white bg-info">
+            <div class="card-body">
+              <h5 class="card-title">Total Posts</h5>
+              <p class="card-text display-6">{{ total_posts }}</p>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="card text-white bg-warning">
+            <div class="card-body">
+              <h5 class="card-title">Engagement Rate</h5>
+              <p class="card-text display-6">{{ engagement_rate }}%</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recent Posts -->
+      <div class="card mb-4">
+        <div class="card-header">
+          <h5 class="card-title mb-0">Recent Posts</h5>
+        </div>
+        <div class="card-body">
+          <div class="table-responsive">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Title</th>
+                  <th>Date</th>
+                  <th>Views</th>
+                  <th>Likes</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for post in recent_posts %}
+                <tr>
+                  <td>{{ post.title }}</td>
+                  <td>{{ post.created_at|date:"M d, Y" }}</td>
+                  <td>{{ post.views }}</td>
+                  <td>{{ post.likes.count }}</td>
+                  <td>
+                    <a href="{% url 'edit_post' post.id %}" class="btn btn-sm btn-outline-primary">
+                      <i class="bi bi-pencil"></i>
+                    </a>
+                    <button class="btn btn-sm btn-outline-danger" onclick="deletePost({{ post.id }})">
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  </td>
+                </tr>
+                {% empty %}
+                <tr>
+                  <td colspan="5" class="text-center">No posts yet</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recent Subscribers -->
+      <div class="card">
+        <div class="card-header">
+          <h5 class="card-title mb-0">Recent Subscribers</h5>
+        </div>
+        <div class="card-body">
+          <div class="table-responsive">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Username</th>
+                  <th>Joined</th>
+                  <th>Plan</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for subscription in recent_subscribers %}
+                <tr>
+                  <td>{{ subscription.user.username }}</td>
+                  <td>{{ subscription.created_at|date:"M d, Y" }}</td>
+                  <td>${{ subscription.plan.price }}/month</td>
+                  <td>
+                    <span class="badge bg-{{ subscription.status|lower }}">
+                      {{ subscription.status }}
+                    </span>
+                  </td>
+                </tr>
+                {% empty %}
+                <tr>
+                  <td colspan="4" class="text-center">No subscribers yet</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- Create Post Modal -->
+<div class="modal fade" id="createPostModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Create New Post</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form method="post" action="{% url 'create_post' %}" enctype="multipart/form-data">
+          {% csrf_token %}
+          <div class="mb-3">
+            <label for="title" class="form-label">Title</label>
+            <input type="text" class="form-control" id="title" name="title" required>
+          </div>
+          <div class="mb-3">
+            <label for="content" class="form-label">Content</label>
+            <textarea class="form-control" id="content" name="content" rows="4" required></textarea>
+          </div>
+          <div class="mb-3">
+            <label for="media" class="form-label">Media</label>
+            <input type="file" class="form-control" id="media" name="media" accept="image/*,video/*">
+          </div>
+          <div class="mb-3">
+            <label for="price" class="form-label">Price (Optional)</label>
+            <input type="number" class="form-control" id="price" name="price" min="0" step="0.01">
+          </div>
+          <button type="submit" class="btn btn-primary">Create Post</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %} 

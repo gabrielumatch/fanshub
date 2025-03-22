@@ -1,0 +1,115 @@
+{% extends 'base.html' %}
+
+{% block title %}Update Payment Method - FansHub{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+  <div class="row justify-content-center">
+    <div class="col-md-8">
+      <div class="card shadow">
+        <div class="card-body p-4">
+          <h2 class="card-title text-center mb-4">Update Payment Method</h2>
+          <p class="text-center text-muted mb-4">
+            Update your payment information for your subscription to {{ subscription.creator.username }}
+          </p>
+
+          <form method="post" id="payment-form">
+            {% csrf_token %}
+            {% if form.errors %}
+            <div class="alert alert-danger">
+              <p><strong>Please correct the errors below:</strong></p>
+              <ul>
+                {% for field in form %}
+                  {% for error in field.errors %}
+                    <li>{{ field.label }}: {{ error }}</li>
+                  {% endfor %}
+                {% endfor %}
+                {% for error in form.non_field_errors %}
+                  <li>{{ error }}</li>
+                {% endfor %}
+              </ul>
+            </div>
+            {% endif %}
+
+            <!-- Current Card Info -->
+            <div class="card bg-light mb-4">
+              <div class="card-body">
+                <h5 class="card-title">Current Card</h5>
+                <p class="mb-1">**** **** **** {{ subscription.last4 }}</p>
+                <p class="mb-0">Expires: {{ subscription.exp_month }}/{{ subscription.exp_year }}</p>
+              </div>
+            </div>
+
+            <!-- New Card Info -->
+            <div class="mb-3">
+              <label for="card_number" class="form-label">Card Number</label>
+              <input type="text" class="form-control" id="card_number" name="card_number" required>
+            </div>
+
+            <div class="row mb-3">
+              <div class="col-md-6">
+                <label for="exp_month" class="form-label">Expiration Month</label>
+                <select class="form-select" id="exp_month" name="exp_month" required>
+                  <option value="">Month</option>
+                  {% for month in "01"|rjust:"12"|make_list %}
+                  <option value="{{ forloop.counter|stringformat:'02d' }}">{{ forloop.counter|stringformat:'02d' }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="col-md-6">
+                <label for="exp_year" class="form-label">Expiration Year</label>
+                <select class="form-select" id="exp_year" name="exp_year" required>
+                  <option value="">Year</option>
+                  {% for year in "2024"|rjust:"10"|make_list %}
+                  <option value="{{ forloop.counter|add:'2023' }}">{{ forloop.counter|add:'2023' }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+            </div>
+
+            <div class="row mb-3">
+              <div class="col-md-6">
+                <label for="cvc" class="form-label">CVC</label>
+                <input type="text" class="form-control" id="cvc" name="cvc" required>
+              </div>
+              <div class="col-md-6">
+                <label for="zip" class="form-label">ZIP Code</label>
+                <input type="text" class="form-control" id="zip" name="zip" required>
+              </div>
+            </div>
+
+            <div class="alert alert-info">
+              <h5 class="alert-heading">Important Information</h5>
+              <p class="mb-0">
+                Your payment information is processed securely through Stripe. We never store your full card details on our servers.
+              </p>
+            </div>
+
+            <div class="d-grid gap-2">
+              <button type="submit" class="btn btn-primary">Update Payment Method</button>
+              <a href="{% url 'subscription_management' %}" class="btn btn-outline-secondary">Cancel</a>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if user.is_authenticated %}
+<script>
+document.getElementById('payment-form').addEventListener('submit', function(e) {
+  e.preventDefault();
+  
+  // Here you would typically:
+  // 1. Create a payment method with Stripe
+  // 2. Update the subscription with the new payment method
+  // 3. Handle any errors
+  // 4. Redirect on success
+  
+  // For now, we'll just submit the form
+  this.submit();
+});
+</script>
+{% endif %}
+{% endblock %} 

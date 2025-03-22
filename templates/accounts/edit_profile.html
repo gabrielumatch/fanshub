@@ -1,0 +1,80 @@
+{% extends 'base.html' %} 
+
+{% block title %}Edit Profile - FansHub{% endblock %} 
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-8">
+    <div class="card shadow">
+      <div class="card-body p-4">
+        <h2 class="card-title text-center mb-4">Edit Profile</h2>
+        <form method="post" enctype="multipart/form-data">
+          {% csrf_token %}
+          {% if form.errors %}
+          <div class="alert alert-danger">
+            <p><strong>Please correct the errors below:</strong></p>
+            <ul>
+              {% for field in form %}
+                {% for error in field.errors %}
+                  <li>{{ field.label }}: {{ error }}</li>
+                {% endfor %}
+              {% endfor %}
+              {% for error in form.non_field_errors %}
+                <li>{{ error }}</li>
+              {% endfor %}
+            </ul>
+          </div>
+          {% endif %}
+
+          <div class="mb-3">
+            <label for="{{ form.bio.id_for_label }}" class="form-label">Bio</label>
+            {{ form.bio }}
+            {% if form.bio.help_text %}
+            <small class="form-text text-muted">{{ form.bio.help_text }}</small>
+            {% endif %}
+          </div>
+
+          <div class="mb-3">
+            <label for="{{ form.profile_picture.id_for_label }}" class="form-label">Profile Picture</label>
+            {{ form.profile_picture }}
+            {% if form.profile_picture.help_text %}
+            <small class="form-text text-muted">{{ form.profile_picture.help_text }}</small>
+            {% endif %}
+            {% if user.profile_picture %}
+            <div class="mt-2">
+              <img src="{{ user.profile_picture.url }}" class="avatar-medium" alt="Current profile picture">
+            </div>
+            {% endif %}
+          </div>
+
+          <div class="mb-3">
+            <label for="{{ form.cover_photo.id_for_label }}" class="form-label">Cover Photo</label>
+            {{ form.cover_photo }}
+            {% if form.cover_photo.help_text %}
+            <small class="form-text text-muted">{{ form.cover_photo.help_text }}</small>
+            {% endif %}
+            {% if user.cover_photo %}
+            <div class="mt-2">
+              <img src="{{ user.cover_photo.url }}" class="img-fluid rounded" style="max-height: 200px;" alt="Current cover photo">
+            </div>
+            {% endif %}
+          </div>
+
+          <div class="mb-3">
+            <label for="{{ form.date_of_birth.id_for_label }}" class="form-label">Date of Birth</label>
+            {{ form.date_of_birth }}
+            {% if form.date_of_birth.help_text %}
+            <small class="form-text text-muted">{{ form.date_of_birth.help_text }}</small>
+            {% endif %}
+          </div>
+
+          <div class="d-grid gap-2">
+            <button type="submit" class="btn btn-primary">Save Changes</button>
+            <a href="{% url 'profile' %}" class="btn btn-outline-secondary">Cancel</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %} 

@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Subscription Confirmed - FansHub{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-body text-center">
+                    <div class="mb-4">
+                        <i class="fas fa-check-circle text-success" style="font-size: 4rem;"></i>
+                    </div>
+                    
+                    <h2 class="mb-4">Subscription Confirmed!</h2>
+                    
+                    <div class="mb-4">
+                        <img src="{{ creator.profile_picture.url }}" alt="{{ creator.username }}" class="rounded-circle mb-3" style="width: 100px; height: 100px; object-fit: cover;">
+                        <h4>{{ creator.username }}</h4>
+                        <p class="text-muted">Monthly subscription: ${{ creator.subscription_price }}</p>
+                    </div>
+
+                    <div class="alert alert-success">
+                        <h5 class="alert-heading">Thank you for subscribing!</h5>
+                        <p class="mb-0">Your subscription has been successfully processed. You now have access to {{ creator.username }}'s exclusive content.</p>
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        <a href="{% url 'creator_profile' creator.username %}" class="btn btn-primary">
+                            View Creator Profile
+                        </a>
+                        <a href="{% url 'home' %}" class="btn btn-outline-secondary">
+                            Return to Home
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

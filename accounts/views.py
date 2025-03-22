@@ -6,10 +6,13 @@ from django.conf import settings
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 import stripe
+from django.db.models import Sum
+from django.utils import timezone
+from datetime import timedelta
 
 from .forms import UserRegistrationForm, UserLoginForm, UserProfileForm, CreatorProfileForm
 from .models import User
-from subscriptions.models import Subscription
+from subscriptions.models import Subscription, PaymentHistory
 from content.models import Post
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
@@ -79,21 +82,19 @@ def become_creator(request):
     if request.method == 'POST':
         form = CreatorProfileForm(request.POST, instance=request.user)
         if form.is_valid():
-            # Create a Stripe account for the creator
             try:
-                account = stripe.Account.create(
-                    type="express",
-                    country="US",
+                # Create a customer for the creator
+                customer = stripe.Customer.create(
                     email=request.user.email,
-                    capabilities={
-                        "card_payments": {"requested": True},
-                        "transfers": {"requested": True},
-                    },
+                    metadata={
+                        'user_id': request.user.id,
+                        'username': request.user.username
+                    }
                 )
                 
                 user = form.save(commit=False)
                 user.is_creator = True
-                user.stripe_account_id = account.id
+                user.stripe_customer_id = customer.id
                 user.save()
                 
                 messages.success(request, _('Congratulations! You are now a creator.'))
@@ -116,11 +117,33 @@ def creator_dashboard(request):
     posts_count = Post.objects.filter(creator=request.user).count()
     subscribers_count = Subscription.objects.filter(creator=request.user, active=True).count()
     
-    # TODO: Fetch earnings data from Stripe
+    # Calculate monthly revenue
+    monthly_revenue = PaymentHistory.objects.filter(
+        recipient=request.user,
+        payment_type='subscription',
+        status='succeeded',
+        created_at__gte=timezone.now() - timedelta(days=30)
+    ).aggregate(total=Sum('amount'))['total'] or 0
+    
+    # Calculate engagement rate (placeholder for now)
+    engagement_rate = 0
+    
+    # Get recent posts
+    recent_posts = Post.objects.filter(creator=request.user).order_by('-created_at')[:5]
+    
+    # Get recent subscribers
+    recent_subscribers = User.objects.filter(
+        subscriptions_received__creator=request.user,
+        subscriptions_received__active=True
+    ).distinct().order_by('-date_joined')[:5]
     
     context = {
         'posts_count': posts_count,
         'subscribers_count': subscribers_count,
+        'monthly_revenue': monthly_revenue,
+        'engagement_rate': engagement_rate,
+        'recent_posts': recent_posts,
+        'recent_subscribers': recent_subscribers,
     }
     return render(request, 'accounts/creator_dashboard.html', context)
 

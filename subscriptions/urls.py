@@ -1,9 +1,11 @@
 from django.urls import path
 from . import views
 
+app_name = 'subscriptions'
+
 urlpatterns = [
-    path('subscribe/<str:username>/', views.subscribe_to_creator, name='subscribe'),
-    path('checkout/success/', views.checkout_success, name='checkout_success'),
-    path('checkout/cancel/', views.checkout_cancel, name='checkout_cancel'),
+    path('subscribe/<str:creator_username>/', views.subscribe, name='subscribe'),
+    path('cancel/<str:creator_username>/', views.cancel_subscription, name='cancel_subscription'),
     path('webhook/', views.stripe_webhook, name='stripe_webhook'),
+    path('confirmation/<str:creator_username>/', views.subscription_confirmation, name='subscription_confirmation'),
 ] 

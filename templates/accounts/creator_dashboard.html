@@ -1,0 +1,218 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Creator Dashboard - FansHub{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row">
+        <!-- Sidebar -->
+        <div class="col-md-3">
+            <div class="card mb-4">
+                <div class="card-body">
+                    <div class="text-center mb-4">
+                        {% if user.profile_picture %}
+                        <img src="{{ user.profile_picture.url }}" alt="{{ user.username }}" class="rounded-circle mb-3" style="width: 100px; height: 100px; object-fit: cover;">
+                        {% else %}
+                        <div class="bg-secondary rounded-circle mb-3 d-flex align-items-center justify-content-center mx-auto" style="width: 100px; height: 100px;">
+                            <span class="text-white display-4">{{ user.username|first|upper }}</span>
+                        </div>
+                        {% endif %}
+                        <h5>{{ user.username }}</h5>
+                        <p class="text-muted">Creator</p>
+                    </div>
+
+                    <div class="list-group">
+                        <a href="#overview" class="list-group-item list-group-item-action active" data-bs-toggle="list">
+                            <i class="fas fa-chart-line me-2"></i> Overview
+                        </a>
+                        <a href="#content" class="list-group-item list-group-item-action" data-bs-toggle="list">
+                            <i class="fas fa-file-alt me-2"></i> Content
+                        </a>
+                        <a href="#subscribers" class="list-group-item list-group-item-action" data-bs-toggle="list">
+                            <i class="fas fa-users me-2"></i> Subscribers
+                        </a>
+                        <a href="#earnings" class="list-group-item list-group-item-action" data-bs-toggle="list">
+                            <i class="fas fa-dollar-sign me-2"></i> Earnings
+                        </a>
+                        <a href="#settings" class="list-group-item list-group-item-action" data-bs-toggle="list">
+                            <i class="fas fa-cog me-2"></i> Settings
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="col-md-9">
+            <!-- Overview Tab -->
+            <div class="tab-content">
+                <div class="tab-pane fade show active" id="overview">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h2>Dashboard Overview</h2>
+                        <a href="{% url 'create_post' %}" class="btn btn-primary">
+                            <i class="fas fa-plus me-2"></i>Create Post
+                        </a>
+                    </div>
+
+                    <!-- Stats Cards -->
+                    <div class="row mb-4">
+                        <div class="col-md-3">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h6 class="card-subtitle mb-2 text-muted">Total Subscribers</h6>
+                                    <h3 class="card-title mb-0">{{ subscribers_count }}</h3>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h6 class="card-subtitle mb-2 text-muted">Monthly Revenue</h6>
+                                    <h3 class="card-title mb-0">${{ monthly_revenue|default:"0" }}</h3>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h6 class="card-subtitle mb-2 text-muted">Total Posts</h6>
+                                    <h3 class="card-title mb-0">{{ posts_count }}</h3>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h6 class="card-subtitle mb-2 text-muted">Engagement Rate</h6>
+                                    <h3 class="card-title mb-0">{{ engagement_rate|default:"0" }}%</h3>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Recent Posts -->
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h5 class="mb-0">Recent Posts</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table">
+                                    <thead>
+                                        <tr>
+                                            <th>Title</th>
+                                            <th>Date</th>
+                                            <th>Likes</th>
+                                            <th>Comments</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for post in recent_posts %}
+                                        <tr>
+                                            <td>{{ post.title|truncatechars:30 }}</td>
+                                            <td>{{ post.created_at|date:"M d, Y" }}</td>
+                                            <td>{{ post.likes_count }}</td>
+                                            <td>{{ post.comments_count }}</td>
+                                            <td>
+                                                <a href="{% url 'edit_post' post.id %}" class="btn btn-sm btn-outline-primary">
+                                                    <i class="fas fa-edit"></i>
+                                                </a>
+                                                <a href="{% url 'post_detail' post.id %}" class="btn btn-sm btn-outline-secondary">
+                                                    <i class="fas fa-eye"></i>
+                                                </a>
+                                            </td>
+                                        </tr>
+                                        {% empty %}
+                                        <tr>
+                                            <td colspan="5" class="text-center">No posts yet</td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Recent Subscribers -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">Recent Subscribers</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table">
+                                    <thead>
+                                        <tr>
+                                            <th>Username</th>
+                                            <th>Joined</th>
+                                            <th>Plan</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for subscriber in recent_subscribers %}
+                                        <tr>
+                                            <td>
+                                                <a href="{% url 'creator_profile' subscriber.username %}" class="text-decoration-none">
+                                                    {{ subscriber.username }}
+                                                </a>
+                                            </td>
+                                            <td>{{ subscriber.date_joined|date:"M d, Y" }}</td>
+                                            <td>${{ subscriber.subscription_price }}/month</td>
+                                            <td>
+                                                <span class="badge bg-success">Active</span>
+                                            </td>
+                                        </tr>
+                                        {% empty %}
+                                        <tr>
+                                            <td colspan="4" class="text-center">No subscribers yet</td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Content Tab -->
+                <div class="tab-pane fade" id="content">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h2>Content Management</h2>
+                        <a href="{% url 'create_post' %}" class="btn btn-primary">
+                            <i class="fas fa-plus me-2"></i>Create Post
+                        </a>
+                    </div>
+                    <!-- Content management interface will go here -->
+                </div>
+
+                <!-- Subscribers Tab -->
+                <div class="tab-pane fade" id="subscribers">
+                    <h2>Subscriber Management</h2>
+                    <!-- Subscriber management interface will go here -->
+                </div>
+
+                <!-- Earnings Tab -->
+                <div class="tab-pane fade" id="earnings">
+                    <h2>Earnings Overview</h2>
+                    <!-- Earnings interface will go here -->
+                </div>
+
+                <!-- Settings Tab -->
+                <div class="tab-pane fade" id="settings">
+                    <h2>Creator Settings</h2>
+                    <!-- Settings interface will go here -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Add any JavaScript for dashboard functionality here
+</script>
+{% endblock %} 

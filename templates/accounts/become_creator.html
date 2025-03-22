@@ -1,0 +1,71 @@
+{% extends 'base.html' %} 
+
+{% block title %}Become a Creator - FansHub{% endblock %} 
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-8">
+    <div class="card shadow">
+      <div class="card-body p-4">
+        <h2 class="card-title text-center mb-4">Become a Creator</h2>
+        <p class="text-center text-muted mb-4">
+          Set up your creator profile and start sharing exclusive content with your fans.
+        </p>
+
+        <form method="post">
+          {% csrf_token %}
+          {% if form.errors %}
+          <div class="alert alert-danger">
+            <p><strong>Please correct the errors below:</strong></p>
+            <ul>
+              {% for field in form %}
+                {% for error in field.errors %}
+                  <li>{{ field.label }}: {{ error }}</li>
+                {% endfor %}
+              {% endfor %}
+              {% for error in form.non_field_errors %}
+                <li>{{ error }}</li>
+              {% endfor %}
+            </ul>
+          </div>
+          {% endif %}
+
+          <div class="mb-3">
+            <label for="{{ form.bio.id_for_label }}" class="form-label">Bio</label>
+            {{ form.bio }}
+            {% if form.bio.help_text %}
+            <small class="form-text text-muted">{{ form.bio.help_text }}</small>
+            {% endif %}
+          </div>
+
+          <div class="mb-3">
+            <label for="{{ form.subscription_price.id_for_label }}" class="form-label">Monthly Subscription Price ($)</label>
+            {{ form.subscription_price }}
+            {% if form.subscription_price.help_text %}
+            <small class="form-text text-muted">{{ form.subscription_price.help_text }}</small>
+            {% endif %}
+          </div>
+
+          <div class="alert alert-info">
+            <h5 class="alert-heading">Important Information</h5>
+            <p class="mb-0">
+              By becoming a creator, you agree to:
+            </p>
+            <ul class="mb-0">
+              <li>Provide accurate and complete information</li>
+              <li>Comply with our terms of service and content guidelines</li>
+              <li>Set up a Stripe account for receiving payments</li>
+              <li>Maintain appropriate content for your subscribers</li>
+            </ul>
+          </div>
+
+          <div class="d-grid gap-2">
+            <button type="submit" class="btn btn-primary">Become a Creator</button>
+            <a href="{% url 'profile' %}" class="btn btn-outline-secondary">Cancel</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %} 

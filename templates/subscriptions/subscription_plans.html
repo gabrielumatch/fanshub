@@ -1,0 +1,160 @@
+{% extends 'base.html' %}
+
+{% block title %}Subscription Plans - FansHub{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+  <div class="text-center mb-5">
+    <h1 class="display-4">Choose Your Plan</h1>
+    <p class="lead text-muted">Select the subscription plan that best fits your needs</p>
+  </div>
+
+  <div class="row row-cols-1 row-cols-md-3 g-4">
+    <!-- Basic Plan -->
+    <div class="col">
+      <div class="card h-100 shadow-sm">
+        <div class="card-body p-4">
+          <h3 class="card-title text-center mb-4">Basic</h3>
+          <div class="text-center mb-4">
+            <span class="display-4">$9.99</span>
+            <span class="text-muted">/month</span>
+          </div>
+          <ul class="list-unstyled">
+            <li class="mb-2">
+              <i class="bi bi-check-circle-fill text-success me-2"></i>
+              Access to basic content
+            </li>
+            <li class="mb-2">
+              <i class="bi bi-check-circle-fill text-success me-2"></i>
+              Direct messaging
+            </li>
+            <li class="mb-2">
+              <i class="bi bi-check-circle-fill text-success me-2"></i>
+              Monthly exclusive post
+            </li>
+          </ul>
+          <div class="text-center mt-4">
+            <a href="{% url 'subscribe' plan='basic' %}" class="btn btn-outline-primary">Subscribe Now</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Premium Plan -->
+    <div class="col">
+      <div class="card h-100 shadow border-primary">
+        <div class="card-body p-4">
+          <div class="text-center mb-3">
+            <span class="badge bg-primary">Most Popular</span>
+          </div>
+          <h3 class="card-title text-center mb-4">Premium</h3>
+          <div class="text-center mb-4">
+            <span class="display-4">$19.99</span>
+            <span class="text-muted">/month</span>
+          </div>
+          <ul class="list-unstyled">
+            <li class="mb-2">
+              <i class="bi bi-check-circle-fill text-success me-2"></i>
+              All basic features
+            </li>
+            <li class="mb-2">
+              <i class="bi bi-check-circle-fill text-success me-2"></i>
+              Weekly exclusive content
+            </li>
+            <li class="mb-2">
+              <i class="bi bi-check-circle-fill text-success me-2"></i>
+              Priority support
+            </li>
+            <li class="mb-2">
+              <i class="bi bi-check-circle-fill text-success me-2"></i>
+              Early access to new content
+            </li>
+          </ul>
+          <div class="text-center mt-4">
+            <a href="{% url 'subscribe' plan='premium' %}" class="btn btn-primary">Subscribe Now</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- VIP Plan -->
+    <div class="col">
+      <div class="card h-100 shadow-sm">
+        <div class="card-body p-4">
+          <h3 class="card-title text-center mb-4">VIP</h3>
+          <div class="text-center mb-4">
+            <span class="display-4">$49.99</span>
+            <span class="text-muted">/month</span>
+          </div>
+          <ul class="list-unstyled">
+            <li class="mb-2">
+              <i class="bi bi-check-circle-fill text-success me-2"></i>
+              All premium features
+            </li>
+            <li class="mb-2">
+              <i class="bi bi-check-circle-fill text-success me-2"></i>
+              Daily exclusive content
+            </li>
+            <li class="mb-2">
+              <i class="bi bi-check-circle-fill text-success me-2"></i>
+              ️Personal shoutouts
+            </li>
+            <li class="mb-2">
+              <i class="bi bi-check-circle-fill text-success me-2"></i>
+              Custom content requests
+            </li>
+          </ul>
+          <div class="text-center mt-4">
+            <a href="{% url 'subscribe' plan='vip' %}" class="btn btn-outline-primary">Subscribe Now</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FAQ Section -->
+  <div class="row mt-5">
+    <div class="col-md-8 mx-auto">
+      <h2 class="text-center mb-4">Frequently Asked Questions</h2>
+      <div class="accordion" id="faqAccordion">
+        <div class="accordion-item">
+          <h3 class="accordion-header">
+            <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#faq1">
+              How do I cancel my subscription?
+            </button>
+          </h3>
+          <div id="faq1" class="accordion-collapse collapse show" data-bs-parent="#faqAccordion">
+            <div class="accordion-body">
+              You can cancel your subscription at any time by going to your account settings and clicking on "Cancel Subscription". Your access will continue until the end of your current billing period.
+            </div>
+          </div>
+        </div>
+        <div class="accordion-item">
+          <h3 class="accordion-header">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq2">
+              Can I upgrade or downgrade my plan?
+            </button>
+          </h3>
+          <div id="faq2" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+            <div class="accordion-body">
+              Yes, you can change your subscription plan at any time. The changes will take effect at the start of your next billing cycle.
+            </div>
+          </div>
+        </div>
+        <div class="accordion-item">
+          <h3 class="accordion-header">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq3">
+              What payment methods do you accept?
+            </button>
+          </h3>
+          <div id="faq3" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+            <div class="accordion-body">
+              We accept all major credit cards (Visa, MasterCard, American Express) and PayPal. All payments are processed securely through Stripe.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %} 
