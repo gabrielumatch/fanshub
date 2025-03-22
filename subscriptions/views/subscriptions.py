@@ -25,7 +25,7 @@ def subscribe(request, creator_username):
     existing_subscription = Subscription.objects.filter(
         subscriber=request.user,
         creator=creator,
-        status='active'
+        active=True
     ).first()
     
     if existing_subscription:
@@ -82,15 +82,14 @@ def cancel_subscription(request, creator_username):
         subscription = Subscription.objects.get(
             subscriber=request.user,
             creator=creator,
-            status='active'
+            active=True
         )
         
         # Cancel the subscription in Stripe
         stripe.Subscription.delete(subscription.stripe_subscription_id)
         
         # Update subscription status
-        subscription.status = 'cancelled'
-        subscription.cancellation_reason = request.POST.get('cancellation_reason')
+        subscription.active = False
         subscription.save()
         
         return redirect('subscriptions:subscription_confirmation', creator_username=creator_username)
@@ -113,7 +112,7 @@ def subscription_confirmation(request, creator_username):
     subscription = Subscription.objects.filter(
         subscriber=request.user,
         creator=creator,
-        status='active'
+        active=True
     ).first()
     
     return render(request, 'subscriptions/subscription_confirmation.html', {
@@ -149,7 +148,7 @@ def stripe_webhook(request):
             subscriber=subscriber,
             creator=creator,
             stripe_subscription_id=payment_intent['id'],
-            status='active'
+            active=True
         )
     
     return JsonResponse({'status': 'success'}) 
