@@ -3,7 +3,7 @@ from django.urls import reverse
 from django.contrib.auth import get_user_model
 from django.template.loader import render_to_string
 from django.core.files.uploadedfile import SimpleUploadedFile
-from content.models import Post, Media, Category, Tag
+from content.models import Post, Media
 from django.test.utils import override_settings
 from django.core.cache import cache
 from django.utils import translation
@@ -31,10 +31,6 @@ class TemplateTests(TestCase):
             text='Test content',
             visibility='public'
         )
-        self.category = Category.objects.create(name='Test Category')
-        self.tag = Tag.objects.create(name='test_tag')
-        self.post.categories.add(self.category)
-        self.post.tags.add(self.tag)
 
     def test_base_template_inheritance(self):
         """Test that all templates properly extend base.html"""
