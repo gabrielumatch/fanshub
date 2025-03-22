@@ -3,6 +3,36 @@
 
 {% block title %}Manage Payment Methods - FansHub{% endblock %}
 
+{% block extra_css %}
+<style>
+    .StripeElement {
+        background-color: white;
+        padding: 12px;
+        border-radius: 6px;
+        border: 1px solid #ced4da;
+    }
+
+    .StripeElement--focus {
+        border-color: #80bdff;
+        box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+    }
+
+    .StripeElement--invalid {
+        border-color: #dc3545;
+    }
+
+    .StripeElement--webkit-autofill {
+        background-color: #fefde5 !important;
+    }
+
+    #card-errors {
+        color: #dc3545;
+        font-size: 0.875rem;
+        margin-top: 0.25rem;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container py-5">
     <div class="row justify-content-center">
@@ -15,12 +45,12 @@
                     <h5 class="card-title mb-0">Add New Card</h5>
                 </div>
                 <div class="card-body">
-                    <form id="payment-form" class="needs-validation" novalidate>
+                    <form id="payment-form">
                         {% csrf_token %}
                         <div class="mb-3">
                             <label for="card-element" class="form-label">Card Details</label>
-                            <div id="card-element" class="form-control" style="height: 40px; padding-top: 10px;"></div>
-                            <div id="card-errors" class="invalid-feedback" role="alert"></div>
+                            <div id="card-element"></div>
+                            <div id="card-errors" role="alert"></div>
                         </div>
                         <div class="form-check mb-3">
                             <input class="form-check-input" type="checkbox" id="save-card" checked>
@@ -30,6 +60,7 @@
                         </div>
                         <button type="submit" class="btn btn-primary" id="submit-button">
                             <span id="button-text">Add Card</span>
+                            <span id="spinner" class="spinner-border spinner-border-sm ms-2 d-none" role="status"></span>
                         </button>
                     </form>
                 </div>
@@ -81,21 +112,38 @@
 
 {% block extra_js %}
 <script>
-    // Initialize Stripe
+    // Initialize Stripe with custom styling
     const stripe = Stripe('{{ stripe_public_key }}');
     const elements = stripe.elements();
-    const card = elements.create('card');
+    const style = {
+        base: {
+            fontSize: '16px',
+            color: '#495057',
+            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+            '::placeholder': {
+                color: '#6c757d'
+            }
+        },
+        invalid: {
+            color: '#dc3545',
+            iconColor: '#dc3545'
+        }
+    };
+    
+    const card = elements.create('card', {style: style});
     card.mount('#card-element');
 
     // Handle form submission
     const form = document.getElementById('payment-form');
     const submitButton = document.getElementById('submit-button');
     const buttonText = document.getElementById('button-text');
+    const spinner = document.getElementById('spinner');
 
     form.addEventListener('submit', async (event) => {
         event.preventDefault();
         submitButton.disabled = true;
         buttonText.textContent = 'Processing...';
+        spinner.classList.remove('d-none');
 
         const {error, paymentMethod} = await stripe.createPaymentMethod({
             type: 'card',
@@ -107,6 +155,7 @@
             errorElement.textContent = error.message;
             submitButton.disabled = false;
             buttonText.textContent = 'Add Card';
+            spinner.classList.add('d-none');
         } else {
             // Send payment method to server
             fetch('{% url "subscriptions:save_payment_method" %}', {
@@ -129,6 +178,7 @@
                     errorElement.textContent = data.message;
                     submitButton.disabled = false;
                     buttonText.textContent = 'Add Card';
+                    spinner.classList.add('d-none');
                 }
             });
         }
@@ -139,8 +189,10 @@
         const errorElement = document.getElementById('card-errors');
         if (event.error) {
             errorElement.textContent = event.error.message;
+            errorElement.classList.remove('d-none');
         } else {
             errorElement.textContent = '';
+            errorElement.classList.add('d-none');
         }
     });
 

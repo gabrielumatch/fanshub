@@ -13,7 +13,8 @@ def list_payment_methods(request):
     """View to list user's saved payment methods"""
     payment_methods = SavedPaymentMethod.objects.filter(user=request.user)
     return render(request, 'subscriptions/payment_methods.html', {
-        'payment_methods': payment_methods
+        'payment_methods': payment_methods,
+        'stripe_public_key': settings.STRIPE_PUBLIC_KEY
     })
 
 @login_required
