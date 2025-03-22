@@ -1,147 +1,151 @@
-# FansHub - OnlyFans Clone
+# FansHub
 
-A content subscription platform built with Django, Supabase, and Stripe. FansHub allows creators to share exclusive content with subscribers, who pay monthly subscription fees to access it.
+FansHub is a content creator platform that allows creators to share content with their subscribers and manage different levels of content visibility.
 
-## Project Overview
+## Features
 
-This project implements a platform similar to OnlyFans where:
+### Content Visibility System
 
-- **Creators** can share content (images, videos, text) and set subscription prices
-- **Users** can subscribe to creators to access their exclusive content
-- **Payments** are processed securely through Stripe
-- **Data** is stored in Supabase (PostgreSQL)
+Posts on FansHub can have three visibility levels:
 
-## Features Implemented
+1. **Public** 
+   - Visible to everyone, including non-registered users
+   - Great for promotional content and attracting new subscribers
+   - No payment required
 
-- **User Authentication System**
+2. **Subscribers Only**
+   - Only visible to users with an active subscription to the creator
+   - Core content that subscribers get access to with their monthly subscription
+   - Protected by the subscription paywall
 
-  - Custom User model with profile fields
-  - Registration and login functionality
-  - Profile management with cover photos and profile pictures
+3. **Premium**
+   - Special content that requires an additional one-time payment
+   - Available for purchase even by existing subscribers
+   - Ideal for exclusive or special content beyond regular subscription benefits
 
-- **Creator Features**
+### Subscription System
 
-  - Creator profiles with customizable subscription pricing
-  - Stripe integration for creator accounts
-  - Dashboard for creators to track subscribers and stats
+- Monthly subscription model
+- Creators set their own subscription price
+- Subscribers get access to all "Subscribers Only" content
+- Subscription auto-renews unless cancelled
+- Subscribers can manage their subscriptions and payment methods
 
-- **Content Management**
+### Creator Features
 
-  - Post model for creators to share content
-  - Media model for images and videos
-  - Premium vs free content options
+- Customizable profile with cover photo and avatar
+- Content management dashboard
+- Post creation with multiple media support (images and videos)
+- Revenue tracking and analytics
+- Subscriber management tools
 
-- **Subscription System**
+### User Features
 
-  - Subscription model with Stripe integration
-  - Payment processing and tracking
-  - Access control for premium content
+- Easy subscription management
+- Content feed from subscribed creators
+- Profile customization
+- Secure payment processing through Stripe
 
-- **User Experience**
-  - Responsive design using Bootstrap 5
-  - Discover page for finding creators
-  - Feed of subscribed content
+## Technical Details
 
-## Technologies Used
-
-- **Backend**: Django 5.1, Django REST Framework
-- **Database**: SQLite (local), Supabase (production)
-- **Authentication**: Django built-in auth + Supabase
-- **Payment Processing**: Stripe API
-- **Frontend**: HTML, CSS, Bootstrap 5
-- **Storage**: Media files stored locally (configurable for cloud storage)
-
-## Project Structure
-
-- **accounts** - User authentication and profile management
-- **content** - Posts and media content management
-- **subscriptions** - Payment processing and subscription handling
-
-## Getting Started
-
-### Prerequisites
-
-- Python 3.8+
-- pip
-- virtualenv
-
-### Installation
-
-1. Clone the repository:
-
+### Post Model
+```python
+class Post(models.Model):
+    VISIBILITY_CHOICES = [
+        ('public', 'Public - Visible to everyone'),
+        ('subscribers', 'Subscribers Only - Visible to subscribers'),
+        ('premium', 'Premium - Requires additional payment'),
+    ]
+    
+    creator = models.ForeignKey(User, on_delete=models.CASCADE)
+    title = models.CharField(max_length=200)
+    text = models.TextField()
+    visibility = models.CharField(max_length=20, choices=VISIBILITY_CHOICES)
+    price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
 ```
+
+### Media Model
+```python
+class Media(models.Model):
+    MEDIA_TYPES = [
+        ('image', 'Image'),
+        ('video', 'Video'),
+    ]
+    
+    post = models.ForeignKey(Post, on_delete=models.CASCADE)
+    file = models.FileField(upload_to='post_media/')
+    media_type = models.CharField(max_length=10, choices=MEDIA_TYPES)
+```
+
+### Subscription Model
+```python
+class Subscription(models.Model):
+    subscriber = models.ForeignKey(User, related_name='subscriptions')
+    creator = models.ForeignKey(User, related_name='subscribers')
+    active = models.BooleanField(default=True)
+    expires_at = models.DateTimeField()
+    price = models.DecimalField(max_digits=10, decimal_places=2)
+```
+
+## Payment Processing
+
+- Integrated with Stripe for secure payment processing
+- Handles both subscription payments and one-time purchases
+- Automatic subscription renewal
+- Secure payment method storage
+
+## Installation
+
+1. Clone the repository
+```bash
 git clone https://github.com/yourusername/fanshub.git
 cd fanshub
 ```
 
-2. Create and activate a virtual environment:
-
-```
+2. Create and activate virtual environment
+```bash
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 ```
 
-3. Install dependencies:
-
-```
+3. Install dependencies
+```bash
 pip install -r requirements.txt
 ```
 
-4. Configure environment variables:
-   Create a `.env` file in the project root with the following variables:
-
-```
-SECRET_KEY=your-django-secret-key
-DEBUG=True
-ALLOWED_HOSTS=localhost,127.0.0.1
-
-SUPABASE_URL=your-supabase-url
-SUPABASE_KEY=your-supabase-anon-key
-
-STRIPE_SECRET_KEY=your-stripe-secret-key
-STRIPE_PUBLISHABLE_KEY=your-stripe-publishable-key
-STRIPE_WEBHOOK_SECRET=your-stripe-webhook-secret
-
-MEDIA_URL=/media/
-MEDIA_ROOT=media/
+4. Set up environment variables
+```bash
+cp .env.example .env
+# Edit .env with your settings
 ```
 
-5. Run migrations:
-
-```
+5. Run migrations
+```bash
 python manage.py migrate
 ```
 
-6. Create a superuser:
-
-```
-python manage.py createsuperuser
-```
-
-7. Run the development server:
-
-```
+6. Start the development server
+```bash
 python manage.py runserver
 ```
 
-8. Visit `http://localhost:8000` in your browser.
+## Environment Variables
 
-## Implementation Details
+- `SECRET_KEY`: Django secret key
+- `DEBUG`: Debug mode (True/False)
+- `ALLOWED_HOSTS`: Comma-separated list of allowed hosts
+- `STRIPE_PUBLIC_KEY`: Your Stripe public key
+- `STRIPE_SECRET_KEY`: Your Stripe secret key
+- `STRIPE_WEBHOOK_SECRET`: Your Stripe webhook secret
 
-- Custom user model extending Django's AbstractUser
-- Stripe integration for subscription payments
-- Media handling for creator content
-- Webhook handling for Stripe events
-- Bootstrap 5 for responsive UI
+## Contributing
 
-## Future Improvements
-
-- Direct messaging between creators and subscribers
-- Tipping functionality
-- Content scheduling
-- Analytics dashboard for creators
-- Email notifications
-- Social sharing features
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
 
 ## License
 

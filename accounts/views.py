@@ -133,8 +133,8 @@ def creator_dashboard(request):
     
     # Get recent subscribers
     recent_subscribers = User.objects.filter(
-        subscriptions_received__creator=request.user,
-        subscriptions_received__active=True
+        subscriptions__creator=request.user,
+        subscriptions__active=True
     ).distinct().order_by('-date_joined')[:5]
     
     context = {
