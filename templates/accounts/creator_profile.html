@@ -93,7 +93,7 @@
                     src="{{ media.file.url }}"
                     class="post-media img-fluid"
                     alt="Post image"
-                    onerror="this.onerror=null; this.src='{% static 'img/default-image.jpg' %}'"
+                    data-fallback="{% static 'img/default-image.jpg' %}"
                   />
                   {% elif media.media_type == 'video' %}
                   <video controls class="post-media w-100">
@@ -108,7 +108,7 @@
                       src="{{ media.file.url }}"
                       class="post-media img-fluid blur"
                       alt="Premium content"
-                      onerror="this.onerror=null; this.src='{% static 'img/default-image.jpg' %}'"
+                      data-fallback="{% static 'img/default-image.jpg' %}"
                     />
                     {% elif media.media_type == 'video' %}
                     <div
@@ -229,6 +229,15 @@
     if (header) {
       header.style.backgroundImage = `url('${header.dataset.bgImage}')`;
     }
+
+    // Handle image errors
+    document.querySelectorAll('img[data-fallback]').forEach(img => {
+      img.addEventListener('error', function() {
+        if (this.src !== this.dataset.fallback) {
+          this.src = this.dataset.fallback;
+        }
+      });
+    });
   });
 </script>
 {% endblock %}
