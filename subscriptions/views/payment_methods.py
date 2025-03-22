@@ -2,8 +2,10 @@ from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
+from django.views.decorators.csrf import csrf_exempt
 from django.conf import settings
 import stripe
+import json
 from subscriptions.models import SavedPaymentMethod
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
@@ -22,11 +24,31 @@ def list_payment_methods(request):
 def save_payment_method(request):
     """View to save a new payment method"""
     try:
-        # Get the payment method ID from the request
-        payment_method_id = request.POST.get('payment_method_id')
+        # Parse JSON data from request body
+        data = json.loads(request.body)
+        payment_method_id = data.get('payment_method_id')
+        
+        if not payment_method_id:
+            return JsonResponse({
+                'success': False,
+                'message': 'Payment method ID is required'
+            }, status=400)
         
         # Retrieve the payment method from Stripe
         payment_method = stripe.PaymentMethod.retrieve(payment_method_id)
+        
+        # Attach the payment method to the customer if they have a Stripe customer ID
+        if request.user.stripe_customer_id:
+            try:
+                payment_method = stripe.PaymentMethod.attach(
+                    payment_method_id,
+                    customer=request.user.stripe_customer_id,
+                )
+            except stripe.error.StripeError as e:
+                return JsonResponse({
+                    'success': False,
+                    'message': str(e)
+                }, status=400)
         
         # Create a new saved payment method
         saved_method = SavedPaymentMethod.objects.create(
@@ -51,6 +73,16 @@ def save_payment_method(request):
                 'is_default': saved_method.is_default
             }
         })
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'message': 'Invalid JSON data'
+        }, status=400)
+    except stripe.error.StripeError as e:
+        return JsonResponse({
+            'success': False,
+            'message': str(e)
+        }, status=400)
     except Exception as e:
         return JsonResponse({
             'success': False,
@@ -62,7 +94,16 @@ def save_payment_method(request):
 def set_default_payment_method(request):
     """View to set a payment method as default"""
     try:
-        payment_method_id = request.POST.get('payment_method_id')
+        # Parse JSON data from request body
+        data = json.loads(request.body)
+        payment_method_id = data.get('payment_method_id')
+        
+        if not payment_method_id:
+            return JsonResponse({
+                'success': False,
+                'message': 'Payment method ID is required'
+            }, status=400)
+        
         payment_method = SavedPaymentMethod.objects.get(
             id=payment_method_id,
             user=request.user
@@ -81,6 +122,11 @@ def set_default_payment_method(request):
             'success': False,
             'message': 'Payment method not found'
         }, status=404)
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'message': 'Invalid JSON data'
+        }, status=400)
     except Exception as e:
         return JsonResponse({
             'success': False,
@@ -92,7 +138,16 @@ def set_default_payment_method(request):
 def delete_payment_method(request):
     """View to delete a saved payment method"""
     try:
-        payment_method_id = request.POST.get('payment_method_id')
+        # Parse JSON data from request body
+        data = json.loads(request.body)
+        payment_method_id = data.get('payment_method_id')
+        
+        if not payment_method_id:
+            return JsonResponse({
+                'success': False,
+                'message': 'Payment method ID is required'
+            }, status=400)
+        
         payment_method = SavedPaymentMethod.objects.get(
             id=payment_method_id,
             user=request.user
@@ -113,6 +168,16 @@ def delete_payment_method(request):
             'success': False,
             'message': 'Payment method not found'
         }, status=404)
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'message': 'Invalid JSON data'
+        }, status=400)
+    except stripe.error.StripeError as e:
+        return JsonResponse({
+            'success': False,
+            'message': str(e)
+        }, status=400)
     except Exception as e:
         return JsonResponse({
             'success': False,
