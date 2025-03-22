@@ -1,0 +1,193 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Manage Payment Methods - FansHub{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <h1 class="text-center mb-4">Manage Payment Methods</h1>
+
+            <!-- Add New Card -->
+            <div class="card shadow mb-4">
+                <div class="card-header bg-white">
+                    <h5 class="card-title mb-0">Add New Card</h5>
+                </div>
+                <div class="card-body">
+                    <form id="payment-form" class="needs-validation" novalidate>
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label for="card-element" class="form-label">Card Details</label>
+                            <div id="card-element" class="form-control" style="height: 40px; padding-top: 10px;"></div>
+                            <div id="card-errors" class="invalid-feedback" role="alert"></div>
+                        </div>
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="save-card" checked>
+                            <label class="form-check-label" for="save-card">
+                                Save this card for future payments
+                            </label>
+                        </div>
+                        <button type="submit" class="btn btn-primary" id="submit-button">
+                            <span id="button-text">Add Card</span>
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Saved Cards -->
+            <div class="card shadow">
+                <div class="card-header bg-white">
+                    <h5 class="card-title mb-0">Saved Cards</h5>
+                </div>
+                <div class="card-body">
+                    {% for method in payment_methods %}
+                    <div class="saved-card mb-3 p-3 border rounded">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <div class="d-flex align-items-center">
+                                    <i class="bi bi-credit-card me-2"></i>
+                                    <span class="fw-bold">•••• {{ method.last4 }}</span>
+                                </div>
+                                <small class="text-muted">
+                                    Expires {{ method.exp_month }}/{{ method.exp_year }}
+                                </small>
+                            </div>
+                            <div>
+                                {% if method.is_default %}
+                                <span class="badge bg-primary me-2">Default</span>
+                                {% else %}
+                                <button class="btn btn-outline-primary btn-sm me-2" 
+                                        onclick="setDefaultCard('{{ method.id }}')">
+                                    Set as Default
+                                </button>
+                                {% endif %}
+                                <button class="btn btn-outline-danger btn-sm" 
+                                        onclick="deleteCard('{{ method.id }}')">
+                                    Delete
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <p class="text-center text-muted">No saved cards yet.</p>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Initialize Stripe
+    const stripe = Stripe('{{ stripe_public_key }}');
+    const elements = stripe.elements();
+    const card = elements.create('card');
+    card.mount('#card-element');
+
+    // Handle form submission
+    const form = document.getElementById('payment-form');
+    const submitButton = document.getElementById('submit-button');
+    const buttonText = document.getElementById('button-text');
+
+    form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        submitButton.disabled = true;
+        buttonText.textContent = 'Processing...';
+
+        const {error, paymentMethod} = await stripe.createPaymentMethod({
+            type: 'card',
+            card: card,
+        });
+
+        if (error) {
+            const errorElement = document.getElementById('card-errors');
+            errorElement.textContent = error.message;
+            submitButton.disabled = false;
+            buttonText.textContent = 'Add Card';
+        } else {
+            // Send payment method to server
+            fetch('{% url "subscriptions:save_payment_method" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                },
+                body: JSON.stringify({
+                    payment_method_id: paymentMethod.id,
+                    save_card: document.getElementById('save-card').checked
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    window.location.reload();
+                } else {
+                    const errorElement = document.getElementById('card-errors');
+                    errorElement.textContent = data.message;
+                    submitButton.disabled = false;
+                    buttonText.textContent = 'Add Card';
+                }
+            });
+        }
+    });
+
+    // Handle card errors
+    card.on('change', (event) => {
+        const errorElement = document.getElementById('card-errors');
+        if (event.error) {
+            errorElement.textContent = event.error.message;
+        } else {
+            errorElement.textContent = '';
+        }
+    });
+
+    // Set default card
+    function setDefaultCard(cardId) {
+        fetch('{% url "subscriptions:set_default_payment_method" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            body: JSON.stringify({
+                payment_method_id: cardId
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                window.location.reload();
+            } else {
+                alert(data.message);
+            }
+        });
+    }
+
+    // Delete card
+    function deleteCard(cardId) {
+        if (confirm('Are you sure you want to delete this card?')) {
+            fetch('{% url "subscriptions:delete_payment_method" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                },
+                body: JSON.stringify({
+                    payment_method_id: cardId
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    window.location.reload();
+                } else {
+                    alert(data.message);
+                }
+            });
+        }
+    }
+</script>
+{% endblock %} 

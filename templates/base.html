@@ -145,6 +145,11 @@
                     <i class="bi bi-gear me-2"></i>Settings
                   </a>
                 </li>
+                <li>
+                  <a class="dropdown-item" href="{% url 'subscriptions:list_payment_methods' %}">
+                    <i class="bi bi-credit-card me-2"></i>Payment Methods
+                  </a>
+                </li>
                 <li><hr class="dropdown-divider" /></li>
                 <li>
                   <form id="logoutForm" method="post" action="{% url 'logout' %}" class="d-inline">

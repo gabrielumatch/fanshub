@@ -88,3 +88,34 @@ class PaymentHistory(models.Model):
         ordering = ['-created_at']
         verbose_name = _('Payment History')
         verbose_name_plural = _('Payment History')
+
+class SavedPaymentMethod(models.Model):
+    """
+    Model to store user's saved payment methods
+    """
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='saved_payment_methods')
+    stripe_payment_method_id = models.CharField(max_length=255)
+    last4 = models.CharField(max_length=4)
+    brand = models.CharField(max_length=50)  # visa, mastercard, etc.
+    exp_month = models.IntegerField()
+    exp_year = models.IntegerField()
+    is_default = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = _('Saved Payment Method')
+        verbose_name_plural = _('Saved Payment Methods')
+        ordering = ['-is_default', '-created_at']
+
+    def __str__(self):
+        return f"{self.user.username}'s {self.brand} card ending in {self.last4}"
+
+    def save(self, *args, **kwargs):
+        # If this is set as default, unset any other default payment methods
+        if self.is_default:
+            SavedPaymentMethod.objects.filter(
+                user=self.user,
+                is_default=True
+            ).exclude(pk=self.pk).update(is_default=False)
+        super().save(*args, **kwargs)
