@@ -92,7 +92,7 @@
             buttonText.textContent = 'Subscribe Now';
         } else {
             // Payment successful
-            window.location.href = "{% url 'subscription_confirmation' creator.username %}";
+            window.location.href = "{% url 'subscriptions:subscription_confirmation' creator.username %}";
         }
     });
 </script>

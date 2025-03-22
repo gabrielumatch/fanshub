@@ -17,6 +17,7 @@ class User(AbstractUser):
     
     # User-specific fields
     date_of_birth = models.DateField(null=True, blank=True)
+    stripe_customer_id = models.CharField(max_length=255, blank=True, null=True)
     
     def __str__(self):
         return self.username

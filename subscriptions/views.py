@@ -31,6 +31,18 @@ def subscribe(request, creator_username):
         return redirect('creator_profile', creator_username=creator_username)
     
     try:
+        # Create or get Stripe customer for the subscriber
+        if not request.user.stripe_customer_id:
+            customer = stripe.Customer.create(
+                email=request.user.email,
+                metadata={
+                    'user_id': request.user.id,
+                    'username': request.user.username
+                }
+            )
+            request.user.stripe_customer_id = customer.id
+            request.user.save()
+        
         # Create a payment intent
         payment_intent = stripe.PaymentIntent.create(
             amount=int(creator.subscription_price * 100),  # Convert to cents
