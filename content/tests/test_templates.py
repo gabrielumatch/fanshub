@@ -5,6 +5,8 @@ from django.template.loader import render_to_string
 from django.core.files.uploadedfile import SimpleUploadedFile
 from content.models import Post, Media, Category, Tag
 from django.test.utils import override_settings
+from django.core.cache import cache
+from django.utils import translation
 import json
 
 User = get_user_model()
@@ -221,12 +223,18 @@ class TemplateTests(TestCase):
 
     def test_template_translations(self):
         """Test template translations"""
+        # Test with English
         response = self.client.get(reverse('landing'))
         self.assertEqual(response.status_code, 200)
-        
-        # Check for translation tags
         self.assertContains(response, '{% trans "')
         self.assertContains(response, '{% blocktrans %}')
+        
+        # Test with Spanish
+        with translation.override('es'):
+            response = self.client.get(reverse('landing'))
+            self.assertEqual(response.status_code, 200)
+            self.assertContains(response, '{% trans "')
+            self.assertContains(response, '{% blocktrans %}')
 
     def test_template_caching(self):
         """Test template caching"""
@@ -241,4 +249,84 @@ class TemplateTests(TestCase):
         # Second request should show cached version
         response2 = self.client.get(reverse('post_detail', args=[self.post.id]))
         self.assertEqual(response2.status_code, 200)
-        self.assertNotContains(response2, 'Updated Title') 
+        self.assertNotContains(response2, 'Updated Title')
+        
+        # Clear cache and verify update
+        cache.clear()
+        response3 = self.client.get(reverse('post_detail', args=[self.post.id]))
+        self.assertEqual(response3.status_code, 200)
+        self.assertContains(response3, 'Updated Title')
+
+    def test_template_media_handling(self):
+        """Test media handling in templates"""
+        # Create test media
+        media_file = SimpleUploadedFile(
+            "test_image.jpg",
+            b"file_content",
+            content_type="image/jpeg"
+        )
+        media = Media.objects.create(
+            post=self.post,
+            file=media_file,
+            media_type='image'
+        )
+        
+        response = self.client.get(reverse('post_detail', args=[self.post.id]))
+        self.assertEqual(response.status_code, 200)
+        
+        # Check for media elements
+        self.assertContains(response, 'post-media')
+        self.assertContains(response, 'media-preview')
+        
+        # Test media fallback
+        media.file.delete()
+        response = self.client.get(reverse('post_detail', args=[self.post.id]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'default-image.jpg')
+
+    def test_template_conditional_visibility(self):
+        """Test conditional visibility in templates"""
+        # Test premium content visibility
+        self.post.visibility = 'premium'
+        self.post.save()
+        
+        # Test as non-subscriber
+        response = self.client.get(reverse('post_detail', args=[self.post.id]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'premium-content-blur')
+        
+        # Test as subscriber
+        self.client.login(username='subscriber', password='testpass123')
+        response = self.client.get(reverse('post_detail', args=[self.post.id]))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'premium-content-blur')
+
+    def test_template_error_handling(self):
+        """Test error handling in templates"""
+        # Test missing template
+        with self.assertRaises(Exception):
+            render_to_string('nonexistent_template.html')
+        
+        # Test template syntax error
+        with self.assertRaises(Exception):
+            render_to_string('content/invalid_template.html')
+
+    def test_template_performance(self):
+        """Test template rendering performance"""
+        # Create multiple posts
+        for i in range(10):
+            Post.objects.create(
+                creator=self.creator,
+                title=f'Test Post {i}',
+                text=f'Test content {i}',
+                visibility='public'
+            )
+        
+        # Test rendering time
+        import time
+        start_time = time.time()
+        response = self.client.get(reverse('creator_profile', args=[self.creator.username]))
+        end_time = time.time()
+        
+        self.assertEqual(response.status_code, 200)
+        self.assertLess(end_time - start_time, 1.0)  # Should render in less than 1 second 
