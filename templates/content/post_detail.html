@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load static %}
 
 {% block title %}{{ post.title }} - FansHub{% endblock %}
 
@@ -19,37 +20,59 @@
               <h5 class="mb-0">{{ post.creator.username }}</h5>
               <small class="text-muted">{{ post.created_at|timesince }} ago</small>
             </div>
+            {% if post.visibility != 'public' %}
+            <span class="badge {% if post.visibility == 'premium' %}bg-warning{% else %}bg-info{% endif %} ms-auto">
+              {% if post.visibility == 'premium' %}Premium{% else %}Subscribers Only{% endif %}
+            </span>
+            {% endif %}
           </div>
 
           <!-- Post Content -->
           <h2 class="card-title mb-3">{{ post.title }}</h2>
-          <p class="card-text">{{ post.content }}</p>
+          
+          {% if can_view %}
+          <p class="card-text">{{ post.text }}</p>
 
           <!-- Post Media -->
-          {% if post.media %}
-          <div class="mb-3">
-            {% if post.media_type == 'image' %}
-            <img src="{{ post.media.url }}" alt="Post media" class="img-fluid rounded">
-            {% elif post.media_type == 'video' %}
-            <video controls class="w-100 rounded">
-              <source src="{{ post.media.url }}" type="video/mp4">
-              Your browser does not support the video tag.
-            </video>
-            {% endif %}
+          {% if post.media.all %}
+          <div class="mt-3">
+            {% for media in post.media.all %}
+            <div class="mb-3">
+              {% if media.media_type == 'image' %}
+              <img src="{{ media.file.url }}" alt="Post media" class="img-fluid rounded">
+              {% elif media.media_type == 'video' %}
+              <video controls class="w-100 rounded">
+                <source src="{{ media.file.url }}" type="video/mp4">
+                Your browser does not support the video tag.
+              </video>
+              {% endif %}
+            </div>
+            {% endfor %}
           </div>
           {% endif %}
-
-          <!-- Post Price -->
-          {% if post.price %}
+          {% else %}
           <div class="alert alert-info">
-            <i class="bi bi-tag"></i> This content is available for ${{ post.price }}
+            {% if post.visibility == 'premium' %}
+            <h5><i class="fas fa-lock"></i> Premium Content</h5>
+            <p>This is premium content that requires an additional payment of ${{ post.price }} to access.</p>
+            {% if is_subscriber %}
+            <a href="{% url 'purchase_premium' post.id %}" class="btn btn-warning">Purchase for ${{ post.price }}</a>
+            {% else %}
+            <p>You need to be a subscriber to purchase premium content.</p>
+            <a href="{% url 'subscribe' post.creator.username %}" class="btn btn-primary">Subscribe for ${{ post.creator.subscription_price }}/month</a>
+            {% endif %}
+            {% else %}
+            <h5><i class="fas fa-lock"></i> Subscribers Only</h5>
+            <p>This content is only available to subscribers.</p>
+            <a href="{% url 'subscribe' post.creator.username %}" class="btn btn-primary">Subscribe for ${{ post.creator.subscription_price }}/month</a>
+            {% endif %}
           </div>
           {% endif %}
 
           <!-- Post Actions -->
           <div class="d-flex justify-content-between align-items-center mt-3">
             <div>
-              <button class="btn btn-outline-primary btn-sm me-2" onclick="likePost({{ post.id }})">
+              <button class="btn btn-outline-primary btn-sm me-2" data-action="like" data-post-id="{{ post.id }}">
                 <i class="bi bi-heart{% if post.is_liked %} text-danger{% endif %}"></i>
                 <span id="like-count">{{ post.likes.count }}</span>
               </button>
@@ -63,7 +86,7 @@
               <a href="{% url 'edit_post' post.id %}" class="btn btn-outline-primary btn-sm">
                 <i class="bi bi-pencil"></i> Edit
               </a>
-              <button class="btn btn-outline-danger btn-sm" onclick="deletePost({{ post.id }})">
+              <button class="btn btn-outline-danger btn-sm" data-action="delete" data-post-id="{{ post.id }}">
                 <i class="bi bi-trash"></i> Delete
               </button>
             </div>
@@ -73,6 +96,7 @@
       </div>
 
       <!-- Comments Section -->
+      {% if can_view %}
       <div class="card shadow">
         <div class="card-body">
           <h5 class="card-title mb-3">Comments</h5>
@@ -93,35 +117,46 @@
           {% endif %}
 
           <!-- Comments List -->
-          <div class="comments-list">
-            {% for comment in post.comments.all %}
-            <div class="comment mb-3">
-              <div class="d-flex">
-                <img src="{{ comment.user.profile_picture.url|default:'/static/images/default-profile.png' }}" 
-                     alt="{{ comment.user.username }}" 
-                     class="rounded-circle me-2"
-                     style="width: 32px; height: 32px; object-fit: cover;">
-                <div class="flex-grow-1">
-                  <div class="d-flex justify-content-between">
-                    <h6 class="mb-0">{{ comment.user.username }}</h6>
-                    <small class="text-muted">{{ comment.created_at|timesince }} ago</small>
-                  </div>
-                  <p class="mb-0">{{ comment.content }}</p>
-                </div>
+          {% for comment in post.comments.all %}
+          <div class="comment mb-3">
+            <div class="d-flex">
+              <img src="{{ comment.user.profile_picture.url|default:'/static/images/default-profile.png' }}" 
+                   alt="{{ comment.user.username }}" 
+                   class="rounded-circle me-2"
+                   style="width: 32px; height: 32px; object-fit: cover;">
+              <div>
+                <h6 class="mb-1">{{ comment.user.username }}</h6>
+                <p class="mb-1">{{ comment.content }}</p>
+                <small class="text-muted">{{ comment.created_at|timesince }} ago</small>
               </div>
             </div>
-            {% empty %}
-            <p class="text-muted text-center">No comments yet. Be the first to comment!</p>
-            {% endfor %}
           </div>
+          {% empty %}
+          <p class="text-muted">No comments yet.</p>
+          {% endfor %}
         </div>
       </div>
+      {% endif %}
     </div>
   </div>
 </div>
+{% endblock %}
 
-{% if user.is_authenticated %}
+{% block extra_js %}
 <script>
+document.addEventListener('DOMContentLoaded', function() {
+  document.querySelectorAll('[data-action]').forEach(button => {
+    button.addEventListener('click', function() {
+      const postId = this.dataset.postId;
+      if (this.dataset.action === 'like') {
+        likePost(postId);
+      } else if (this.dataset.action === 'delete') {
+        deletePost(postId);
+      }
+    });
+  });
+});
+
 function likePost(postId) {
   fetch(`/api/posts/${postId}/like/`, {
     method: 'POST',
@@ -132,16 +167,12 @@ function likePost(postId) {
   })
   .then(response => response.json())
   .then(data => {
-    const likeButton = document.querySelector('.btn-outline-primary');
-    const likeCount = document.getElementById('like-count');
-    
-    if (data.liked) {
-      likeButton.querySelector('i').classList.add('text-danger');
-    } else {
-      likeButton.querySelector('i').classList.remove('text-danger');
+    if (data.success) {
+      const likeCount = document.getElementById('like-count');
+      likeCount.textContent = data.likes_count;
+      const heartIcon = likeCount.previousElementSibling;
+      heartIcon.classList.toggle('text-danger');
     }
-    
-    likeCount.textContent = data.likes_count;
   });
 }
 
@@ -167,5 +198,4 @@ function focusComment() {
   document.querySelector('textarea[name="content"]').focus();
 }
 </script>
-{% endif %}
 {% endblock %} 

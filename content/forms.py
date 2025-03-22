@@ -50,24 +50,29 @@ class PostForm(forms.ModelForm):
         return cleaned_data
 
 class MediaForm(forms.ModelForm):
-    """Form for adding media to posts"""
-    media_type = forms.ChoiceField(
-        choices=Media.MEDIA_TYPES,
-        widget=forms.Select(attrs={'class': 'form-select'})
-    )
+    """Form for handling media uploads"""
     file = forms.FileField(
         widget=forms.FileInput(attrs={'class': 'form-control'}),
-        required=False
-    )
-    thumbnail = forms.ImageField(
-        widget=forms.FileInput(attrs={'class': 'form-control'}),
-        required=False,
-        help_text=_('Thumbnail for video content (optional)')
+        help_text=_('Upload image or video files')
     )
     
     class Meta:
         model = Media
-        fields = ('media_type', 'file', 'thumbnail')
+        fields = ['file']
+        
+    def clean_file(self):
+        file = self.cleaned_data.get('file')
+        if file:
+            # Get the file extension
+            ext = file.name.split('.')[-1].lower()
+            # Check if it's an image or video
+            if ext in ['jpg', 'jpeg', 'png', 'gif']:
+                self.instance.media_type = 'image'
+            elif ext in ['mp4', 'mov', 'avi']:
+                self.instance.media_type = 'video'
+            else:
+                raise forms.ValidationError(_('Unsupported file type. Please upload images or videos only.'))
+        return file
 
 # Create a formset for adding multiple media files to a post
 MediaFormSet = inlineformset_factory(

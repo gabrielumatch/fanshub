@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load static %}
 
 {% block title %}Edit Post - FansHub{% endblock %}
 
@@ -7,24 +8,20 @@
   <div class="row justify-content-center">
     <div class="col-md-8">
       <div class="card shadow">
-        <div class="card-body p-4">
-          <h2 class="card-title text-center mb-4">Edit Post</h2>
-
-          <form method="post" enctype="multipart/form-data">
+        <div class="card-header bg-white">
+          <h4 class="mb-0">Edit Post</h4>
+        </div>
+        <div class="card-body">
+          <form method="post" enctype="multipart/form-data" id="editPostForm">
             {% csrf_token %}
+            
             {% if form.errors %}
             <div class="alert alert-danger">
-              <p><strong>Please correct the errors below:</strong></p>
-              <ul>
-                {% for field in form %}
-                  {% for error in field.errors %}
-                    <li>{{ field.label }}: {{ error }}</li>
-                  {% endfor %}
+              {% for field in form %}
+                {% for error in field.errors %}
+                  <p class="mb-0">{{ error }}</p>
                 {% endfor %}
-                {% for error in form.non_field_errors %}
-                  <li>{{ error }}</li>
-                {% endfor %}
-              </ul>
+              {% endfor %}
             </div>
             {% endif %}
 
@@ -32,42 +29,81 @@
               <label for="{{ form.title.id_for_label }}" class="form-label">Title</label>
               {{ form.title }}
               {% if form.title.help_text %}
-              <small class="form-text text-muted">{{ form.title.help_text }}</small>
+              <div class="form-text">{{ form.title.help_text }}</div>
               {% endif %}
             </div>
 
             <div class="mb-3">
-              <label for="{{ form.content.id_for_label }}" class="form-label">Content</label>
-              {{ form.content }}
-              {% if form.content.help_text %}
-              <small class="form-text text-muted">{{ form.content.help_text }}</small>
+              <label for="{{ form.text.id_for_label }}" class="form-label">Content</label>
+              {{ form.text }}
+              {% if form.text.help_text %}
+              <div class="form-text">{{ form.text.help_text }}</div>
               {% endif %}
             </div>
 
-            <div class="mb-3">
-              <label for="{{ form.media.id_for_label }}" class="form-label">Media</label>
-              {% if post.media %}
-              <div class="mb-2">
-                <img src="{{ post.media.url }}" alt="Current media" class="img-fluid rounded">
+            <div class="mb-4">
+              <label class="form-label">Post Visibility</label>
+              <div class="visibility-options border rounded p-3">
+                {% for radio in form.visibility %}
+                <div class="form-check mb-2">
+                  {{ radio }}
+                  <label class="form-check-label" for="{{ radio.id_for_label }}">
+                    {{ radio.choice_label }}
+                  </label>
+                </div>
+                {% endfor %}
               </div>
+              {% if form.visibility.help_text %}
+              <div class="form-text">{{ form.visibility.help_text }}</div>
               {% endif %}
-              {{ form.media }}
-              {% if form.media.help_text %}
-              <small class="form-text text-muted">{{ form.media.help_text }}</small>
-              {% endif %}
+            </div>
+
+            <div class="mb-3" id="priceField" style="display: none;">
+              <label for="{{ form.price.id_for_label }}" class="form-label">Price (USD)</label>
+              {{ form.price }}
+              <div class="form-text">Set the price for premium content</div>
             </div>
 
             <div class="mb-3">
-              <label for="{{ form.price.id_for_label }}" class="form-label">Price (Optional)</label>
-              {{ form.price }}
-              {% if form.price.help_text %}
-              <small class="form-text text-muted">{{ form.price.help_text }}</small>
-              {% endif %}
+              <label class="form-label">Media</label>
+              {{ formset.management_form }}
+              <div id="mediaFormset">
+                {% for media_form in formset %}
+                <div class="media-form mb-2">
+                  {% if media_form.instance.file %}
+                  <div class="mb-2">
+                    {% if media_form.instance.media_type == 'image' %}
+                    <img src="{{ media_form.instance.file.url }}" alt="Current media" class="img-fluid rounded" style="max-height: 200px;">
+                    {% elif media_form.instance.media_type == 'video' %}
+                    <video controls class="img-fluid rounded" style="max-height: 200px;">
+                      <source src="{{ media_form.instance.file.url }}" type="video/mp4">
+                    </video>
+                    {% endif %}
+                  </div>
+                  {% endif %}
+                  {{ media_form.file }}
+                  {% if media_form.file.help_text %}
+                  <div class="form-text">{{ media_form.file.help_text }}</div>
+                  {% endif %}
+                  {% if media_form.instance.pk %}
+                  <div class="form-check mt-2">
+                    {{ media_form.DELETE }}
+                    <label class="form-check-label" for="{{ media_form.DELETE.id_for_label }}">
+                      Delete this media
+                    </label>
+                  </div>
+                  {% endif %}
+                </div>
+                {% endfor %}
+              </div>
             </div>
 
-            <div class="d-grid gap-2">
-              <button type="submit" class="btn btn-primary">Save Changes</button>
-              <a href="{% url 'creator_dashboard' %}" class="btn btn-outline-secondary">Cancel</a>
+            <div class="d-flex justify-content-between">
+              <a href="{% url 'post_detail' post.id %}" class="btn btn-outline-secondary">Cancel</a>
+              <button type="submit" class="btn btn-primary">
+                <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                Save Changes
+              </button>
             </div>
           </form>
         </div>
@@ -75,4 +111,37 @@
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const form = document.getElementById('editPostForm');
+  const visibilityInputs = document.querySelectorAll('input[name="visibility"]');
+  const priceField = document.getElementById('priceField');
+  const submitBtn = form.querySelector('button[type="submit"]');
+  const spinner = submitBtn.querySelector('.spinner-border');
+
+  // Show/hide price field based on visibility selection
+  visibilityInputs.forEach(input => {
+    input.addEventListener('change', function() {
+      priceField.style.display = this.value === 'premium' ? 'block' : 'none';
+      if (this.value !== 'premium') {
+        document.getElementById('id_price').value = '';
+      }
+    });
+  });
+
+  // Show price field on load if premium is selected
+  if (document.querySelector('input[name="visibility"]:checked').value === 'premium') {
+    priceField.style.display = 'block';
+  }
+
+  // Handle form submission
+  form.addEventListener('submit', function() {
+    submitBtn.disabled = true;
+    spinner.classList.remove('d-none');
+  });
+});
+</script>
 {% endblock %} 

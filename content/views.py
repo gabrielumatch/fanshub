@@ -3,6 +3,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.utils.translation import gettext_lazy as _
 from django.http import JsonResponse
+from django.urls import reverse
 
 from .models import Post, Media
 from .forms import PostForm, MediaFormSet
@@ -59,19 +60,52 @@ def create_post(request):
             post.save()
             
             # Save media files
+            media_files = []
             for media_form in formset:
                 if media_form.cleaned_data.get('file'):
                     media = media_form.save(commit=False)
                     media.post = post
                     media.save()
+                    media_files.append({
+                        'id': media.id,
+                        'url': media.file.url,
+                        'type': media.media_type
+                    })
+            
+            # Check if this is an AJAX request
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({
+                    'success': True,
+                    'redirect_url': reverse('post_detail', args=[post.id]),
+                    'post': {
+                        'id': post.id,
+                        'title': post.title,
+                        'text': post.text,
+                        'visibility': post.visibility,
+                        'price': str(post.price) if post.price else None,
+                        'media': media_files
+                    }
+                })
             
             messages.success(request, _('Your post has been created successfully.'))
-            return redirect('profile')
+            return redirect('post_detail', post_id=post.id)
+        else:
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({
+                    'success': False,
+                    'errors': {
+                        'form': form.errors,
+                        'media': formset.errors
+                    }
+                })
     else:
         form = PostForm()
         formset = MediaFormSet(prefix='media')
     
-    return render(request, 'content/create_post.html', {'form': form, 'formset': formset})
+    return render(request, 'content/create_post.html', {
+        'form': form,
+        'formset': formset
+    })
 
 @login_required
 def post_detail(request, post_id):
@@ -81,20 +115,63 @@ def post_detail(request, post_id):
     # Check if user can view this post
     can_view = True
     
-    # If it's a paid post, check if user is subscribed or is the creator
-    if post.is_paid:
+    # Check visibility permissions
+    if post.visibility in ['subscribers', 'premium']:
         if request.user == post.creator:
             can_view = True
         else:
+            # Check if user is subscribed
             is_subscribed = Subscription.objects.filter(
                 subscriber=request.user,
                 creator=post.creator,
                 active=True
             ).exists()
-            can_view = is_subscribed
+            
+            # For premium content, user must be subscribed and pay the additional fee
+            if post.visibility == 'premium':
+                # TODO: Implement premium content purchase check
+                can_view = False
+            else:
+                can_view = is_subscribed
     
     context = {
         'post': post,
-        'can_view': can_view
+        'can_view': can_view,
+        'is_subscriber': Subscription.objects.filter(
+            subscriber=request.user,
+            creator=post.creator,
+            active=True
+        ).exists() if request.user.is_authenticated else False
     }
+    
     return render(request, 'content/post_detail.html', context)
+
+@login_required
+def edit_post(request, post_id):
+    """Edit an existing post"""
+    post = get_object_or_404(Post, id=post_id)
+    
+    # Check if user is the creator
+    if request.user != post.creator:
+        messages.error(request, _('You can only edit your own posts.'))
+        return redirect('post_detail', post_id=post.id)
+    
+    if request.method == 'POST':
+        form = PostForm(request.POST, instance=post)
+        formset = MediaFormSet(request.POST, request.FILES, instance=post, prefix='media')
+        
+        if form.is_valid() and formset.is_valid():
+            post = form.save()
+            formset.save()
+            
+            messages.success(request, _('Your post has been updated successfully.'))
+            return redirect('post_detail', post_id=post.id)
+    else:
+        form = PostForm(instance=post)
+        formset = MediaFormSet(instance=post, prefix='media')
+    
+    return render(request, 'content/edit_post.html', {
+        'form': form,
+        'formset': formset,
+        'post': post
+    })

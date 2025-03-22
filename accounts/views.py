@@ -174,3 +174,43 @@ def creator_profile(request, username):
         'is_subscribed': is_subscribed,
     }
     return render(request, 'accounts/creator_profile.html', context)
+
+@login_required
+def settings_view(request):
+    if request.method == 'POST':
+        # Update user information
+        user = request.user
+        user.username = request.POST.get('username')
+        user.email = request.POST.get('email')
+        user.bio = request.POST.get('bio')
+
+        # Handle profile picture
+        if 'profile_picture' in request.FILES:
+            user.profile_picture = request.FILES['profile_picture']
+
+        # Handle cover photo
+        if 'cover_photo' in request.FILES:
+            user.cover_photo = request.FILES['cover_photo']
+
+        # Handle password change
+        current_password = request.POST.get('current_password')
+        new_password = request.POST.get('new_password')
+        confirm_password = request.POST.get('confirm_password')
+
+        if current_password and new_password and confirm_password:
+            if user.check_password(current_password):
+                if new_password == confirm_password:
+                    user.set_password(new_password)
+                else:
+                    messages.error(request, 'New passwords do not match.')
+            else:
+                messages.error(request, 'Current password is incorrect.')
+
+        try:
+            user.save()
+            messages.success(request, 'Settings updated successfully.')
+            return redirect('settings')
+        except Exception as e:
+            messages.error(request, f'Error updating settings: {str(e)}')
+
+    return render(request, 'accounts/settings.html')

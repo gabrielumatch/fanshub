@@ -37,10 +37,10 @@
               </div>
             </div>
             <div class="mt-3">
-              <button class="btn btn-outline-danger btn-sm" onclick="cancelSubscription({{ subscription.id }})">
+              <button class="btn btn-outline-danger btn-sm" data-subscription-id="{{ subscription.id }}" data-action="cancel">
                 Cancel Subscription
               </button>
-              <button class="btn btn-outline-primary btn-sm" onclick="updatePaymentMethod({{ subscription.id }})">
+              <button class="btn btn-outline-primary btn-sm" data-subscription-id="{{ subscription.id }}" data-action="update">
                 Update Payment Method
               </button>
             </div>
@@ -132,6 +132,19 @@
 
 {% if user.is_authenticated %}
 <script>
+document.addEventListener('DOMContentLoaded', function() {
+  document.querySelectorAll('[data-action]').forEach(button => {
+    button.addEventListener('click', function() {
+      const subscriptionId = this.dataset.subscriptionId;
+      if (this.dataset.action === 'cancel') {
+        cancelSubscription(subscriptionId);
+      } else if (this.dataset.action === 'update') {
+        updatePaymentMethod(subscriptionId);
+      }
+    });
+  });
+});
+
 let currentSubscriptionId = null;
 
 function cancelSubscription(subscriptionId) {
