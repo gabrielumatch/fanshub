@@ -7,6 +7,7 @@ from rest_framework.test import APITestCase, APIClient
 from content.models import Post, Category, Tag
 from subscriptions.models import Subscription
 from django.utils import timezone
+from datetime import timedelta
 
 User = get_user_model()
 
@@ -33,64 +34,72 @@ class APITests(APITestCase):
 
     def test_user_registration(self):
         """Test user registration API"""
-        url = reverse('api:register')
-        data = {
-            'username': 'newuser',
-            'email': 'newuser@example.com',
-            'password': 'testpass123',
-            'password2': 'testpass123'
-        }
-        response = self.client.post(url, data, format='json')
+        response = self.client.post(
+            reverse('api:register'),
+            {
+                'username': 'newuser',
+                'email': 'newuser@example.com',
+                'password': 'testpass123'
+            }
+        )
+        
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertTrue(User.objects.filter(username='newuser').exists())
 
     def test_user_login(self):
         """Test user login API"""
-        url = reverse('api:login')
-        data = {
-            'username': 'creator',
-            'password': 'testpass123'
-        }
-        response = self.client.post(url, data, format='json')
+        response = self.client.post(
+            reverse('api:login'),
+            {
+                'username': 'creator',
+                'password': 'testpass123'
+            }
+        )
+        
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn('token', response.data)
 
     def test_post_list(self):
-        """Test post listing API"""
-        url = reverse('api:post-list')
-        response = self.client.get(url)
+        """Test post list API"""
+        response = self.client.get(reverse('api:post_list'))
+        
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 1)
+        self.assertEqual(len(response.data['results']), 1)
 
     def test_post_detail(self):
         """Test post detail API"""
-        url = reverse('api:post-detail', kwargs={'pk': self.post.id})
-        response = self.client.get(url)
+        response = self.client.get(
+            reverse('api:post_detail', args=[self.post.id])
+        )
+        
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['title'], 'Test Post')
 
     def test_post_creation(self):
         """Test post creation API"""
         self.client.force_authenticate(user=self.creator)
-        url = reverse('api:post-list')
-        data = {
-            'title': 'New Post',
-            'text': 'New content',
-            'visibility': 'public'
-        }
-        response = self.client.post(url, data, format='json')
+        
+        response = self.client.post(
+            reverse('api:post_list'),
+            {
+                'title': 'New Post',
+                'text': 'New content',
+                'visibility': 'public'
+            }
+        )
+        
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(Post.objects.count(), 2)
+        self.assertTrue(Post.objects.filter(title='New Post').exists())
 
     def test_post_update(self):
         """Test post update API"""
         self.client.force_authenticate(user=self.creator)
-        url = reverse('api:post-detail', kwargs={'pk': self.post.id})
-        data = {
-            'title': 'Updated Post',
-            'text': 'Updated content'
-        }
-        response = self.client.patch(url, data, format='json')
+        
+        response = self.client.patch(
+            reverse('api:post_detail', args=[self.post.id]),
+            {'title': 'Updated Post'}
+        )
+        
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.post.refresh_from_db()
         self.assertEqual(self.post.title, 'Updated Post')
@@ -98,10 +107,118 @@ class APITests(APITestCase):
     def test_post_deletion(self):
         """Test post deletion API"""
         self.client.force_authenticate(user=self.creator)
-        url = reverse('api:post-detail', kwargs={'pk': self.post.id})
-        response = self.client.delete(url)
+        
+        response = self.client.delete(
+            reverse('api:post_detail', args=[self.post.id])
+        )
+        
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
-        self.assertEqual(Post.objects.count(), 0)
+        self.assertFalse(Post.objects.filter(id=self.post.id).exists())
+
+    def test_subscription_management(self):
+        """Test subscription management API"""
+        self.client.force_authenticate(user=self.subscriber)
+        
+        # Create subscription
+        response = self.client.post(
+            reverse('api:subscription_list'),
+            {
+                'creator_id': self.creator.id,
+                'plan_id': 'price_test123'
+            }
+        )
+        
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        
+        # Cancel subscription
+        subscription_id = response.data['id']
+        response = self.client.post(
+            reverse('api:subscription_cancel', args=[subscription_id])
+        )
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_payment_method_management(self):
+        """Test payment method management API"""
+        self.client.force_authenticate(user=self.subscriber)
+        
+        # Add payment method
+        response = self.client.post(
+            reverse('api:payment_method_list'),
+            {
+                'stripe_token': 'tok_test123',
+                'card_brand': 'visa',
+                'last4': '4242'
+            }
+        )
+        
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        
+        # List payment methods
+        response = self.client.get(reverse('api:payment_method_list'))
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+
+    def test_notification_list(self):
+        """Test notification list API"""
+        self.client.force_authenticate(user=self.creator)
+        
+        response = self.client.get(reverse('api:notification_list'))
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIsInstance(response.data, list)
+
+    def test_user_profile(self):
+        """Test user profile API"""
+        self.client.force_authenticate(user=self.creator)
+        
+        response = self.client.get(
+            reverse('api:user_profile', args=[self.creator.id])
+        )
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['username'], 'creator')
+
+    def test_user_profile_update(self):
+        """Test user profile update API"""
+        self.client.force_authenticate(user=self.creator)
+        
+        response = self.client.patch(
+            reverse('api:user_profile', args=[self.creator.id]),
+            {'bio': 'Updated bio'}
+        )
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.creator.refresh_from_db()
+        self.assertEqual(self.creator.bio, 'Updated bio')
+
+    def test_search_api(self):
+        """Test search API"""
+        response = self.client.get(
+            reverse('api:search'),
+            {'q': 'test', 'type': 'content'}
+        )
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data['results']), 1)
+
+    def test_api_rate_limiting(self):
+        """Test API rate limiting"""
+        for _ in range(100):  # Assuming rate limit is 100 requests per minute
+            response = self.client.get(reverse('api:post_list'))
+        
+        response = self.client.get(reverse('api:post_list'))
+        self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
+    def test_api_authentication(self):
+        """Test API authentication"""
+        response = self.client.get(reverse('api:post_list'))
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)  # Public endpoint
+        
+        response = self.client.get(reverse('api:user_profile', args=[self.creator.id]))
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)  # Private endpoint
 
     def test_subscription_creation(self):
         """Test subscription creation API"""
@@ -133,27 +250,6 @@ class APITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
         subscription.refresh_from_db()
         self.assertEqual(subscription.status, 'cancelled')
-
-    def test_user_profile(self):
-        """Test user profile API"""
-        self.client.force_authenticate(user=self.creator)
-        url = reverse('api:user-profile')
-        response = self.client.get(url)
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['username'], 'creator')
-
-    def test_user_profile_update(self):
-        """Test user profile update API"""
-        self.client.force_authenticate(user=self.creator)
-        url = reverse('api:user-profile')
-        data = {
-            'bio': 'Updated bio',
-            'location': 'New York'
-        }
-        response = self.client.patch(url, data, format='json')
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.creator.profile.refresh_from_db()
-        self.assertEqual(self.creator.profile.bio, 'Updated bio')
 
     def test_content_search(self):
         """Test content search API"""
@@ -207,13 +303,6 @@ class APITests(APITestCase):
         self.assertIn('subscriber_count', response.data)
         self.assertIn('post_count', response.data)
         self.assertIn('total_revenue', response.data)
-
-    def test_notification_list(self):
-        """Test notification listing API"""
-        self.client.force_authenticate(user=self.creator)
-        url = reverse('api:notification-list')
-        response = self.client.get(url)
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     def test_notification_mark_read(self):
         """Test marking notifications as read"""

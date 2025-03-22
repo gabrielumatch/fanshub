@@ -1,10 +1,10 @@
 from django.test import TestCase, Client
 from django.urls import reverse
 from django.contrib.auth import get_user_model
-from django.utils import timezone
 from notifications.models import Notification
-from content.models import Post, Comment, Like
-from subscriptions.models import Subscription
+from content.models import Post
+from django.utils import timezone
+from datetime import timedelta
 
 User = get_user_model()
 
@@ -30,189 +30,262 @@ class NotificationTests(TestCase):
         )
 
     def test_new_subscriber_notification(self):
-        """Test notification when new subscriber follows"""
-        subscription = Subscription.objects.create(
-            subscriber=self.subscriber,
+        """Test notification for new subscriber"""
+        # Create subscription
+        self.subscriber.subscriptions.create(
             creator=self.creator,
-            active=True,
-            expires_at=timezone.now() + timezone.timedelta(days=30)
+            status='active'
         )
+        
+        # Check notification
         notification = Notification.objects.get(
             recipient=self.creator,
             notification_type='new_subscriber'
         )
         self.assertEqual(notification.actor, self.subscriber)
-        self.assertEqual(notification.target, subscription)
+        self.assertFalse(notification.read)
 
     def test_new_comment_notification(self):
-        """Test notification when new comment is made"""
-        comment = Comment.objects.create(
+        """Test notification for new comment"""
+        # Create comment
+        self.post.comments.create(
             user=self.subscriber,
-            post=self.post,
-            content='Test comment'
+            text='Test comment'
         )
+        
+        # Check notification
         notification = Notification.objects.get(
             recipient=self.creator,
             notification_type='new_comment'
         )
         self.assertEqual(notification.actor, self.subscriber)
-        self.assertEqual(notification.target, comment)
+        self.assertEqual(notification.target, self.post)
+        self.assertFalse(notification.read)
 
     def test_new_like_notification(self):
-        """Test notification when post is liked"""
-        like = Like.objects.create(
-            user=self.subscriber,
-            post=self.post
-        )
+        """Test notification for new like"""
+        # Create like
+        self.post.likes.create(user=self.subscriber)
+        
+        # Check notification
         notification = Notification.objects.get(
             recipient=self.creator,
             notification_type='new_like'
         )
         self.assertEqual(notification.actor, self.subscriber)
-        self.assertEqual(notification.target, like)
+        self.assertEqual(notification.target, self.post)
+        self.assertFalse(notification.read)
 
     def test_subscription_renewal_notification(self):
         """Test notification for subscription renewal"""
-        subscription = Subscription.objects.create(
-            subscriber=self.subscriber,
+        # Create subscription
+        subscription = self.subscriber.subscriptions.create(
             creator=self.creator,
-            active=True,
-            expires_at=timezone.now() + timezone.timedelta(days=30)
+            status='active'
         )
-        # Simulate subscription renewal
-        subscription.renew()
+        
+        # Simulate renewal
+        subscription.renewal_date = timezone.now() + timedelta(days=1)
+        subscription.save()
+        
+        # Check notification
         notification = Notification.objects.get(
             recipient=self.subscriber,
-            notification_type='subscription_renewed'
+            notification_type='subscription_renewal'
         )
-        self.assertEqual(notification.actor, self.creator)
         self.assertEqual(notification.target, subscription)
+        self.assertFalse(notification.read)
 
     def test_payment_failure_notification(self):
-        """Test notification for failed payment"""
-        subscription = Subscription.objects.create(
-            subscriber=self.subscriber,
+        """Test notification for payment failure"""
+        # Create subscription
+        subscription = self.subscriber.subscriptions.create(
             creator=self.creator,
-            active=True,
-            expires_at=timezone.now() + timezone.timedelta(days=30)
+            status='active'
         )
+        
         # Simulate payment failure
-        subscription.handle_payment_failure()
+        subscription.status = 'payment_failed'
+        subscription.save()
+        
+        # Check notification
         notification = Notification.objects.get(
             recipient=self.subscriber,
-            notification_type='payment_failed'
+            notification_type='payment_failure'
         )
-        self.assertEqual(notification.actor, self.creator)
         self.assertEqual(notification.target, subscription)
+        self.assertFalse(notification.read)
 
     def test_content_approval_notification(self):
         """Test notification for content approval"""
+        # Create pending post
         post = Post.objects.create(
             creator=self.subscriber,
             title='Pending Post',
-            text='Test content',
-            visibility='public',
+            text='Pending content',
             status='pending'
         )
-        # Simulate content approval
-        post.approve()
+        
+        # Approve post
+        post.status = 'approved'
+        post.save()
+        
+        # Check notification
         notification = Notification.objects.get(
             recipient=self.subscriber,
             notification_type='content_approved'
         )
         self.assertEqual(notification.target, post)
+        self.assertFalse(notification.read)
 
-    def test_notification_read_status(self):
-        """Test marking notifications as read"""
-        # Create a notification
+    def test_mark_notification_read(self):
+        """Test marking notification as read"""
+        # Create notification
         notification = Notification.objects.create(
             recipient=self.creator,
             actor=self.subscriber,
-            notification_type='new_subscriber',
-            target=self.post
+            notification_type='new_subscriber'
         )
+        
         # Mark as read
         self.client.login(username='creator', password='testpass123')
         response = self.client.post(
-            reverse('mark_notification_read', kwargs={'notification_id': notification.id})
+            reverse('notifications:mark_read', args=[notification.id])
         )
+        
         self.assertEqual(response.status_code, 200)
         notification.refresh_from_db()
         self.assertTrue(notification.read)
 
-    def test_notification_list_view(self):
-        """Test notification list view"""
-        # Create some notifications
-        for i in range(3):
-            Notification.objects.create(
-                recipient=self.creator,
-                actor=self.subscriber,
-                notification_type='new_like',
-                target=self.post
-            )
-        # Test view
+    def test_notification_list(self):
+        """Test listing notifications"""
+        # Create multiple notifications
+        Notification.objects.create(
+            recipient=self.creator,
+            actor=self.subscriber,
+            notification_type='new_subscriber'
+        )
+        Notification.objects.create(
+            recipient=self.creator,
+            actor=self.subscriber,
+            notification_type='new_comment',
+            target=self.post
+        )
+        
+        # Get notifications
         self.client.login(username='creator', password='testpass123')
-        response = self.client.get(reverse('notifications'))
+        response = self.client.get(reverse('notifications:list'))
+        
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.context['notifications']), 3)
+        self.assertEqual(len(response.json()['notifications']), 2)
 
     def test_notification_preferences(self):
         """Test notification preferences"""
         self.client.login(username='creator', password='testpass123')
+        
         # Update preferences
         response = self.client.post(
-            reverse('notification_preferences'),
+            reverse('notifications:preferences'),
             {
-                'email_notifications': True,
-                'push_notifications': False,
-                'new_subscriber_notifications': True,
-                'new_comment_notifications': False,
-                'new_like_notifications': True
+                'email_notifications': False,
+                'push_notifications': True,
+                'notification_types': ['new_subscriber', 'new_comment']
             }
         )
+        
         self.assertEqual(response.status_code, 200)
-        # Verify preferences were saved
         self.creator.refresh_from_db()
-        self.assertTrue(self.creator.profile.email_notifications)
-        self.assertFalse(self.creator.profile.push_notifications)
+        self.assertFalse(self.creator.email_notifications)
+        self.assertTrue(self.creator.push_notifications)
 
-    def test_notification_cleanup(self):
+    def test_cleanup_old_notifications(self):
         """Test cleanup of old notifications"""
         # Create old notification
         old_notification = Notification.objects.create(
             recipient=self.creator,
             actor=self.subscriber,
-            notification_type='new_like',
-            target=self.post,
-            created_at=timezone.now() - timezone.timedelta(days=90)
+            notification_type='new_subscriber',
+            created_at=timezone.now() - timedelta(days=90)
         )
+        
         # Run cleanup
         Notification.cleanup_old_notifications()
-        # Verify old notification was deleted
+        
+        # Verify deletion
         self.assertFalse(Notification.objects.filter(id=old_notification.id).exists())
 
-    def test_notification_batch_actions(self):
+    def test_batch_notification_actions(self):
         """Test batch actions on notifications"""
         # Create multiple notifications
-        notifications = []
-        for i in range(3):
-            notification = Notification.objects.create(
+        notifications = [
+            Notification.objects.create(
                 recipient=self.creator,
                 actor=self.subscriber,
-                notification_type='new_like',
+                notification_type='new_subscriber'
+            ),
+            Notification.objects.create(
+                recipient=self.creator,
+                actor=self.subscriber,
+                notification_type='new_comment',
                 target=self.post
             )
-            notifications.append(notification)
+        ]
         
-        # Test marking all as read
+        # Mark all as read
         self.client.login(username='creator', password='testpass123')
         response = self.client.post(
-            reverse('mark_all_notifications_read'),
+            reverse('notifications:mark_all_read'),
             {'notification_ids': [n.id for n in notifications]}
         )
-        self.assertEqual(response.status_code, 200)
         
-        # Verify all notifications are read
+        self.assertEqual(response.status_code, 200)
         for notification in notifications:
             notification.refresh_from_db()
-            self.assertTrue(notification.read) 
+            self.assertTrue(notification.read)
+
+    def test_notification_count(self):
+        """Test unread notification count"""
+        # Create unread notifications
+        Notification.objects.create(
+            recipient=self.creator,
+            actor=self.subscriber,
+            notification_type='new_subscriber'
+        )
+        Notification.objects.create(
+            recipient=self.creator,
+            actor=self.subscriber,
+            notification_type='new_comment',
+            target=self.post
+        )
+        
+        # Get count
+        self.client.login(username='creator', password='testpass123')
+        response = self.client.get(reverse('notifications:count'))
+        
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['count'], 2)
+
+    def test_notification_filters(self):
+        """Test filtering notifications"""
+        # Create different types of notifications
+        Notification.objects.create(
+            recipient=self.creator,
+            actor=self.subscriber,
+            notification_type='new_subscriber'
+        )
+        Notification.objects.create(
+            recipient=self.creator,
+            actor=self.subscriber,
+            notification_type='new_comment',
+            target=self.post
+        )
+        
+        # Filter by type
+        self.client.login(username='creator', password='testpass123')
+        response = self.client.get(
+            reverse('notifications:list'),
+            {'type': 'new_subscriber'}
+        )
+        
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()['notifications']), 1) 
