@@ -175,3 +175,21 @@ def edit_post(request, post_id):
         'formset': formset,
         'post': post
     })
+
+@login_required
+def add_comment(request, post_id):
+    """Add a comment to a post"""
+    post = get_object_or_404(Post, id=post_id)
+    
+    if request.method == 'POST':
+        content = request.POST.get('content')
+        if content:
+            post.comments.create(
+                user=request.user,
+                content=content
+            )
+            messages.success(request, _('Your comment has been added successfully.'))
+        else:
+            messages.error(request, _('Comment content cannot be empty.'))
+    
+    return redirect('post_detail', post_id=post.id)
