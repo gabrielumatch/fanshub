@@ -18,12 +18,14 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+from accounts.views import settings_view
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('accounts/', include('accounts.urls')),
     path('subscriptions/', include('subscriptions.urls')),
     path('', include('content.urls')),
+    path('settings/', settings_view, name='settings'),
 ]
 
 # Serve media files in development

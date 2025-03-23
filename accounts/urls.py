@@ -11,5 +11,4 @@ urlpatterns = [
     path('become-creator/', views.become_creator, name='become_creator'),
     path('creator/dashboard/', views.creator_dashboard, name='creator_dashboard'),
     path('creator/<str:username>/', views.creator_profile, name='creator_profile'),
-    path('settings/', views.settings_view, name='settings'),
 ] 
