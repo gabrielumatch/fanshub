@@ -4,8 +4,9 @@ from django.contrib import messages
 from django.utils.translation import gettext_lazy as _
 from django.http import JsonResponse
 from django.urls import reverse
+from django.db.models import Q
 
-from .models import Post, Media, Like
+from .models import Post, Media, Like, Chat
 from .forms import PostForm, MediaFormSet
 from accounts.models import User
 from subscriptions.models import Subscription
@@ -177,6 +178,23 @@ def edit_post(request, post_id):
     })
 
 @login_required
+def delete_post(request, post_id):
+    """Delete a post"""
+    post = get_object_or_404(Post, id=post_id)
+    
+    # Check if user is the creator
+    if request.user != post.creator:
+        messages.error(request, _('You can only delete your own posts.'))
+        return redirect('post_detail', post_id=post.id)
+    
+    if request.method == 'POST':
+        post.delete()
+        messages.success(request, _('Your post has been deleted successfully.'))
+        return redirect('home')
+    
+    return render(request, 'content/delete_post.html', {'post': post})
+
+@login_required
 def add_comment(request, post_id):
     """Add a comment to a post"""
     post = get_object_or_404(Post, id=post_id)
@@ -244,3 +262,62 @@ def like_post(request, post_id):
         'is_liked': is_liked,
         'likes_count': post.likes.count()
     })
+
+@login_required
+def chat_list(request):
+    """View all chats for the current user"""
+    if request.user.is_creator:
+        # For creators, show chats with subscribers
+        chats = Chat.objects.filter(creator=request.user)
+    else:
+        # For subscribers, show chats with creators
+        chats = Chat.objects.filter(subscriber=request.user)
+    
+    # Get unread message counts for each chat
+    for chat in chats:
+        chat.unread_count = chat.messages.filter(is_read=False).exclude(sender=request.user).count()
+    
+    return render(request, 'content/chat_list.html', {'chats': chats})
+
+@login_required
+def chat_detail(request, chat_id):
+    """View a specific chat"""
+    chat = get_object_or_404(Chat, id=chat_id)
+    
+    # Check if user has permission to view this chat
+    if request.user != chat.creator and request.user != chat.subscriber:
+        raise Http404("You don't have permission to view this chat")
+    
+    # Mark messages as read
+    chat.messages.filter(is_read=False).exclude(sender=request.user).update(is_read=True)
+    
+    # Get the other user in the chat
+    other_user = chat.subscriber if request.user == chat.creator else chat.creator
+    
+    context = {
+        'chat': chat,
+        'other_user': other_user,
+        'messages': chat.messages.all(),
+    }
+    
+    return render(request, 'content/chat_detail.html', context)
+
+@login_required
+def start_chat(request, username):
+    """Start a new chat with a user"""
+    other_user = get_object_or_404(User, username=username)
+    
+    # Check if chat already exists
+    chat = Chat.objects.filter(
+        (Q(creator=request.user, subscriber=other_user) |
+         Q(creator=other_user, subscriber=request.user))
+    ).first()
+    
+    if not chat:
+        # Create new chat
+        if request.user.is_creator:
+            chat = Chat.objects.create(creator=request.user, subscriber=other_user)
+        else:
+            chat = Chat.objects.create(creator=other_user, subscriber=request.user)
+    
+    return redirect('chat_detail', chat_id=chat.id)

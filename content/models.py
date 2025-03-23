@@ -163,3 +163,34 @@ class Save(models.Model):
         unique_together = ['user', 'post']
         verbose_name = _('Save')
         verbose_name_plural = _('Saves')
+
+class Chat(models.Model):
+    creator = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='creator_chats')
+    subscriber = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='subscriber_chats')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        unique_together = ('creator', 'subscriber')
+        ordering = ['-updated_at']
+
+    def __str__(self):
+        return f"Chat between {self.creator.username} and {self.subscriber.username}"
+
+class Message(models.Model):
+    chat = models.ForeignKey(Chat, on_delete=models.CASCADE, related_name='messages')
+    sender = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='sent_messages')
+    content = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    is_read = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f"Message from {self.sender.username} in {self.chat}"
+
+    def mark_as_read(self):
+        self.is_read = True
+        self.save()

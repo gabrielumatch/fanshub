@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+
+{% block title %}Messages - FansHub{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">Messages</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="list-group list-group-flush">
+                        {% for chat in chats %}
+                        <a href="{% url 'chat_detail' chat.id %}" class="list-group-item list-group-item-action d-flex align-items-center">
+                            {% if chat.creator == user %}
+                                {% if chat.subscriber.profile_picture %}
+                                <img src="{{ chat.subscriber.profile_picture.url }}" class="avatar-small me-2" alt="{{ chat.subscriber.username }}">
+                                {% else %}
+                                <div class="bg-secondary avatar-small text-white d-flex align-items-center justify-content-center me-2">
+                                    {{ chat.subscriber.username|first|upper }}
+                                </div>
+                                {% endif %}
+                                <div class="flex-grow-1">
+                                    <h6 class="mb-1">{{ chat.subscriber.username }}</h6>
+                                    <small class="text-muted">Subscriber</small>
+                                </div>
+                            {% else %}
+                                {% if chat.creator.profile_picture %}
+                                <img src="{{ chat.creator.profile_picture.url }}" class="avatar-small me-2" alt="{{ chat.creator.username }}">
+                                {% else %}
+                                <div class="bg-secondary avatar-small text-white d-flex align-items-center justify-content-center me-2">
+                                    {{ chat.creator.username|first|upper }}
+                                </div>
+                                {% endif %}
+                                <div class="flex-grow-1">
+                                    <h6 class="mb-1">{{ chat.creator.username }}</h6>
+                                    <small class="text-muted">Creator</small>
+                                </div>
+                            {% endif %}
+                            {% if chat.unread_count > 0 %}
+                            <span class="badge bg-primary rounded-pill">{{ chat.unread_count }}</span>
+                            {% endif %}
+                        </a>
+                        {% empty %}
+                        <div class="list-group-item text-center py-4">
+                            <p class="text-muted mb-0">No messages yet</p>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-body text-center py-5">
+                    <h5>Select a conversation</h5>
+                    <p class="text-muted">Choose a chat from the list to start messaging</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

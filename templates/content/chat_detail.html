@@ -1,0 +1,112 @@
+{% extends 'base.html' %}
+
+{% block title %}Chat with {{ other_user.username }} - FansHub{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">Messages</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="list-group list-group-flush">
+                        <a href="{% url 'chat_list' %}" class="list-group-item list-group-item-action">
+                            <i class="bi bi-arrow-left me-2"></i>Back to Messages
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header bg-white">
+                    <div class="d-flex align-items-center">
+                        {% if other_user.profile_picture %}
+                        <img src="{{ other_user.profile_picture.url }}" class="avatar-small me-2" alt="{{ other_user.username }}">
+                        {% else %}
+                        <div class="bg-secondary avatar-small text-white d-flex align-items-center justify-content-center me-2">
+                            {{ other_user.username|first|upper }}
+                        </div>
+                        {% endif %}
+                        <div>
+                            <h5 class="mb-0">{{ other_user.username }}</h5>
+                            <small class="text-muted">
+                                {% if other_user.is_creator %}Creator{% else %}Subscriber{% endif %}
+                            </small>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body chat-messages" style="height: 400px; overflow-y: auto;">
+                    {% for message in messages %}
+                    <div class="message mb-3 {% if message.sender == user %}text-end{% endif %}">
+                        <div class="d-inline-block {% if message.sender == user %}bg-primary text-white{% else %}bg-light{% endif %} rounded p-2">
+                            {{ message.content }}
+                        </div>
+                        <small class="text-muted d-block mt-1">
+                            {{ message.created_at|date:"g:i A" }}
+                        </small>
+                    </div>
+                    {% endfor %}
+                </div>
+                <div class="card-footer bg-white">
+                    <form id="chat-form" class="d-flex">
+                        <input type="text" id="chat-message-input" class="form-control me-2" placeholder="Type a message...">
+                        <button type="submit" class="btn btn-primary">Send</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const chatSocket = new WebSocket(
+    'ws://' + window.location.host + '/ws/chat/{{ chat.id }}/'
+);
+
+chatSocket.onmessage = function(e) {
+    const data = JSON.parse(e.data);
+    const messagesDiv = document.querySelector('.chat-messages');
+    const isCurrentUser = data.user_id === {{ user.id }};
+    
+    const messageHtml = `
+        <div class="message mb-3 ${isCurrentUser ? 'text-end' : ''}">
+            <div class="d-inline-block ${isCurrentUser ? 'bg-primary text-white' : 'bg-light'} rounded p-2">
+                ${data.message}
+            </div>
+            <small class="text-muted d-block mt-1">
+                Just now
+            </small>
+        </div>
+    `;
+    
+    messagesDiv.insertAdjacentHTML('beforeend', messageHtml);
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+};
+
+chatSocket.onclose = function(e) {
+    console.error('Chat socket closed unexpectedly');
+};
+
+document.querySelector('#chat-form').onsubmit = function(e) {
+    e.preventDefault();
+    const messageInputDom = document.querySelector('#chat-message-input');
+    const message = messageInputDom.value;
+    
+    if (message.trim()) {
+        chatSocket.send(JSON.stringify({
+            'message': message,
+            'user_id': {{ user.id }}
+        }));
+        messageInputDom.value = '';
+    }
+};
+
+// Scroll to bottom of messages
+document.querySelector('.chat-messages').scrollTop = document.querySelector('.chat-messages').scrollHeight;
+</script>
+{% endblock %} 

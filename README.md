@@ -34,6 +34,12 @@ FansHub is a modern platform that connects content creators with their fans, ena
   - Default payment method selection
   - Automatic payment method updates
 
+- **Real-time Chat**
+  - Direct messaging between creators and subscribers
+  - Real-time message updates
+  - Message history
+  - Unread message indicators
+
 ## Technical Specifications
 
 - **Backend**: Django 4.2
@@ -42,6 +48,100 @@ FansHub is a modern platform that connects content creators with their fans, ena
 - **File Storage**: AWS S3
 - **Payment Processing**: Stripe
 - **Authentication**: Django Auth System
+- **Real-time Communication**: Django Channels with Redis
+- **Containerization**: Docker
+
+## Prerequisites
+
+- Python 3.8+
+- Docker and Docker Compose
+- Virtual environment (recommended)
+
+## Installation
+
+1. Clone the repository:
+```bash
+git clone https://github.com/yourusername/fanshub.git
+cd fanshub
+```
+
+2. Create and activate virtual environment:
+```bash
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+```
+
+3. Install dependencies:
+```bash
+pip install -r requirements.txt
+```
+
+4. Set up environment variables:
+```bash
+cp .env.example .env
+# Edit .env with your configuration
+```
+
+5. Start Redis using Docker:
+```bash
+docker-compose up -d
+```
+
+6. Run migrations:
+```bash
+python manage.py migrate
+```
+
+7. Create a superuser:
+```bash
+python manage.py createsuperuser
+```
+
+8. Start the development server:
+```bash
+# Using Daphne for WebSocket support
+daphne -b 0.0.0.0 -p 8000 fanshub.asgi:application
+```
+
+## Development
+
+### Running Redis
+
+Redis is required for real-time chat functionality. The project includes a Docker Compose configuration to run Redis:
+
+```bash
+# Start Redis
+docker-compose up -d
+
+# Stop Redis
+docker-compose down
+
+# View Redis logs
+docker-compose logs redis
+```
+
+### Running Tests
+
+```bash
+# Run all tests
+python manage.py test
+
+# Run specific test file
+python manage.py test content.tests.test_social_features
+
+# Run tests with coverage
+coverage run manage.py test
+coverage report
+coverage html
+```
+
+### Development Server
+
+For development with WebSocket support, use Daphne instead of the default Django development server:
+
+```bash
+daphne -b 0.0.0.0 -p 8000 fanshub.asgi:application
+```
 
 ## Test Coverage
 
@@ -172,59 +272,6 @@ FansHub is a modern platform that connects content creators with their fans, ena
 - [x] Notification retrieval
 - [x] Notification management
 
-## Running Tests
-
-### Prerequisites
-- Python 3.8+
-- Virtual environment
-- Chrome WebDriver (for Selenium tests)
-
-### Installation
-```bash
-# Create and activate virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-```
-
-### Running Tests
-```bash
-# Run all tests
-python manage.py test
-
-# Run specific test file
-python manage.py test content.tests.test_social_features
-
-# Run tests with coverage
-coverage run manage.py test
-coverage report
-coverage html
-```
-
-### Test Files Structure
-```
-tests/
-├── content/
-│   ├── test_social_features.py
-│   ├── test_templates.py
-│   ├── test_javascript.py
-│   └── test_search.py
-├── accounts/
-│   ├── test_auth.py
-│   └── test_privacy.py
-├── payments/
-│   ├── test_payment.py
-│   └── test_subscription.py
-├── notifications/
-│   └── test_notifications.py
-├── api/
-│   └── test_api.py
-└── e2e/
-    └── test_user_journeys.py
-```
-
 ## Test Coverage Requirements
 
 - Minimum coverage: 80%
@@ -249,13 +296,11 @@ Tests are automatically run on:
 
 ## Contributing
 
-When adding new features or modifying existing ones, please ensure:
-
-1. Write unit tests for new functionality
-2. Update existing tests if modifying features
-3. Add integration tests for external service interactions
-4. Include end-to-end tests for critical user flows
-5. Maintain test coverage above 80%
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
 ## License
 

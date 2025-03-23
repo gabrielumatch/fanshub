@@ -105,6 +105,11 @@
           </ul>
           <ul class="navbar-nav">
             {% if user.is_authenticated %}
+            <li class="nav-item">
+              <a class="nav-link" href="{% url 'chat_list' %}">
+                <i class="bi bi-chat"></i> Messages
+              </a>
+            </li>
             <li class="nav-item dropdown">
               <a
                 class="nav-link dropdown-toggle"

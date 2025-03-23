@@ -178,6 +178,14 @@
               >Subscribe Now</a
             >
             {% endif %}
+
+            {% if user.is_authenticated and user != creator %}
+            <div class="mt-3">
+              <a href="{% url 'start_chat' creator.username %}" class="btn btn-outline-primary w-100">
+                <i class="bi bi-chat me-2"></i>Message {{ creator.username }}
+              </a>
+            </div>
+            {% endif %}
           </div>
         </div>
 
