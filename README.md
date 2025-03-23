@@ -39,6 +39,11 @@ FansHub is a modern platform that connects content creators with their fans, ena
   - Real-time message updates
   - Message history
   - Unread message indicators
+  - Media sharing (images and videos)
+  - Typing indicators
+  - Online/offline status
+  - Message timestamps
+  - Message read receipts
 
 ## Technical Specifications
 
@@ -50,6 +55,8 @@ FansHub is a modern platform that connects content creators with their fans, ena
 - **Authentication**: Django Auth System
 - **Real-time Communication**: Django Channels with Redis
 - **Containerization**: Docker
+- **WebSocket Server**: Daphne
+- **Media Processing**: Pillow (for images)
 
 ## Prerequisites
 
@@ -294,13 +301,156 @@ Tests are automatically run on:
 - Maintain test data fixtures
 - Keep test dependencies updated
 
+## Docker Setup
+
+### Development Environment
+
+1. Build and start the containers:
+```bash
+docker-compose up --build
+```
+
+2. Run migrations:
+```bash
+docker-compose exec web python manage.py migrate
+```
+
+3. Create a superuser:
+```bash
+docker-compose exec web python manage.py createsuperuser
+```
+
+4. Access the application at http://localhost:8000
+
+### Production Environment
+
+1. Build and start the containers:
+```bash
+docker-compose -f docker-compose.prod.yml up --build
+```
+
+2. Run migrations:
+```bash
+docker-compose -f docker-compose.prod.yml exec web python manage.py migrate
+```
+
+3. Collect static files:
+```bash
+docker-compose -f docker-compose.prod.yml exec web python manage.py collectstatic --noinput
+```
+
+### Docker Volumes
+
+The project uses the following Docker volumes:
+- `static_volume`: For serving static files
+- `media_volume`: For storing uploaded media files
+- `postgres_data`: For persistent database storage
+
+### Environment Variables
+
+Required environment variables for Docker:
+```env
+DEBUG=0
+SECRET_KEY=your-secret-key
+DATABASE_URL=postgres://user:password@db:5432/dbname
+REDIS_URL=redis://redis:6379/0
+AWS_ACCESS_KEY_ID=your-access-key
+AWS_SECRET_ACCESS_KEY=your-secret-key
+AWS_STORAGE_BUCKET_NAME=your-bucket-name
+STRIPE_PUBLIC_KEY=your-stripe-public-key
+STRIPE_SECRET_KEY=your-stripe-secret-key
+```
+
+## Testing
+
+### Running Tests in Docker
+
+```bash
+# Run all tests
+docker-compose exec web python manage.py test
+
+# Run specific test file
+docker-compose exec web python manage.py test content.tests.test_chat
+
+# Run tests with coverage
+docker-compose exec web coverage run manage.py test
+docker-compose exec web coverage report
+docker-compose exec web coverage html
+```
+
+### Chat-specific Tests
+
+The following tests are available for the chat functionality:
+- [x] WebSocket connection
+- [x] Message sending/receiving
+- [x] Media file handling
+- [x] Typing indicators
+- [x] Online/offline status
+- [x] Message history
+- [x] Real-time updates
+- [x] Error handling
+- [x] Media file validation
+- [x] Message persistence
+- [x] User authentication
+- [x] Chat room management
+
+### Test Coverage
+
+To generate a coverage report:
+```bash
+docker-compose exec web coverage run manage.py test
+docker-compose exec web coverage report
+docker-compose exec web coverage html
+```
+
+The coverage report will be available in the `htmlcov` directory.
+
+## Troubleshooting
+
+### Common Issues
+
+1. WebSocket Connection Issues
+   - Ensure Redis is running: `docker-compose ps`
+   - Check Redis logs: `docker-compose logs redis`
+   - Verify WebSocket URL in browser console
+   - Check Daphne server logs
+
+2. Media Upload Issues
+   - Verify media volume is mounted: `docker-compose exec web ls /app/media`
+   - Check file permissions: `docker-compose exec web ls -la /app/media`
+   - Verify AWS credentials if using S3
+   - Check file size limits in settings
+
+3. Database Connection Issues
+   - Verify PostgreSQL is running: `docker-compose ps`
+   - Check database logs: `docker-compose logs db`
+   - Verify database credentials in .env
+   - Check database migrations: `docker-compose exec web python manage.py showmigrations`
+
+### Logs
+
+View logs for different services:
+```bash
+# Web service logs
+docker-compose logs web
+
+# Redis logs
+docker-compose logs redis
+
+# Database logs
+docker-compose logs db
+
+# All logs
+docker-compose logs
+```
+
 ## Contributing
 
 1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+2. Create a feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a Pull Request
 
 ## License
 
