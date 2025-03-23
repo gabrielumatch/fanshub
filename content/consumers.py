@@ -21,178 +21,171 @@ logger.addHandler(handler)
 
 User = get_user_model()
 
+# Store online users in memory
+online_users = {}
+
 class ChatConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         try:
-            # Get chat_id from URL route
+            logger.debug(f"Attempting to connect to chat room: {self.scope['url_route']['kwargs']['chat_id']}")
             self.chat_id = self.scope['url_route']['kwargs']['chat_id']
             self.room_group_name = f'chat_{self.chat_id}'
+            self.user_id = self.scope['user'].id
             
-            logger.info(f"Attempting to connect to chat {self.chat_id}")
-            logger.debug(f"Connection scope: {self.scope}")
-            
-            # Verify chat exists and user has permission
-            chat = await self.get_chat()
-            if not chat:
-                logger.error(f"Chat {self.chat_id} not found")
-                await self.close()
-                return
-                
-            user = self.scope.get('user')
-            if not user or not user.is_authenticated:
-                logger.error(f"Unauthenticated user tried to connect to chat {self.chat_id}")
-                await self.close()
-                return
-                
-            if user.id not in [chat.creator_id, chat.subscriber_id]:
-                logger.error(f"User {user.id} not authorized for chat {self.chat_id}")
-                await self.close()
-                return
-
             # Join room group
             await self.channel_layer.group_add(
                 self.room_group_name,
                 self.channel_name
             )
-            logger.info(f"Added to group {self.room_group_name}")
-
-            await self.accept()
-            logger.info(f"Connection accepted for chat {self.chat_id}")
             
+            # Add user to online users set
+            if self.chat_id not in online_users:
+                online_users[self.chat_id] = set()
+            online_users[self.chat_id].add(self.user_id)
+            
+            # Notify others that user is online
+            await self.channel_layer.group_send(
+                self.room_group_name,
+                {
+                    'type': 'user_status',
+                    'user_id': self.user_id,
+                    'status': 'online'
+                }
+            )
+            
+            await self.accept()
+            logger.debug(f"Successfully connected to chat room: {self.chat_id}")
         except Exception as e:
             logger.error(f"Error in connect: {str(e)}")
             logger.error(traceback.format_exc())
-            await self.close()
+            raise
 
     async def disconnect(self, close_code):
         try:
-            logger.info(f"Disconnecting from chat {self.chat_id} with code {close_code}")
+            logger.debug(f"Disconnecting from chat room: {self.chat_id}")
+            # Remove user from online users set
+            if self.chat_id in online_users:
+                online_users[self.chat_id].discard(self.user_id)
+            
+            # Notify others that user is offline
+            await self.channel_layer.group_send(
+                self.room_group_name,
+                {
+                    'type': 'user_status',
+                    'user_id': self.user_id,
+                    'status': 'offline'
+                }
+            )
+            
             # Leave room group
             await self.channel_layer.group_discard(
                 self.room_group_name,
                 self.channel_name
             )
-            logger.info(f"Disconnected from group {self.room_group_name}")
+            logger.debug(f"Successfully disconnected from chat room: {self.chat_id}")
         except Exception as e:
             logger.error(f"Error in disconnect: {str(e)}")
             logger.error(traceback.format_exc())
+            raise
 
     async def receive(self, text_data):
         try:
-            logger.info(f"Received message in chat {self.chat_id}")
-            logger.debug(f"Raw message data: {text_data}")
-            
-            # Parse message data
+            logger.debug(f"Received message: {text_data}")
             text_data_json = json.loads(text_data)
-            message = text_data_json['message']
-            user_id = text_data_json['user_id']
+            message_type = text_data_json.get('type', 'message')
             
-            # Verify user has permission
-            chat = await self.get_chat()
-            if not chat or user_id not in [chat.creator_id, chat.subscriber_id]:
-                logger.error(f"User {user_id} not authorized to send messages in chat {self.chat_id}")
-                return
-            
-            logger.info(f"Processing message from user {user_id} in chat {self.chat_id}")
-            logger.debug(f"Message content: {message}")
-
-            # Save message to database
-            try:
-                saved_message = await self.save_message(user_id, message)
-                logger.info(f"Message {saved_message.id} saved to database for chat {self.chat_id}")
-            except Exception as e:
-                logger.error(f"Failed to save message to database: {str(e)}")
-                logger.error(traceback.format_exc())
-                return
-
-            # Send message to room group
-            try:
-                username = await self.get_username(user_id)
+            if message_type == 'message':
+                message = text_data_json.get('message', '')
+                await self.save_message(message)
                 await self.channel_layer.group_send(
                     self.room_group_name,
                     {
                         'type': 'chat_message',
                         'message': message,
-                        'user_id': user_id,
-                        'username': username,
-                        'message_id': saved_message.id
+                        'user_id': self.user_id,
+                        'username': self.scope['user'].username
                     }
                 )
-                logger.info(f"Message sent to group {self.room_group_name}")
-            except Exception as e:
-                logger.error(f"Failed to send message to group: {str(e)}")
-                logger.error(traceback.format_exc())
-                
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to decode message JSON: {str(e)}")
-        except KeyError as e:
-            logger.error(f"Missing required field in message: {str(e)}")
+            elif message_type == 'typing':
+                is_typing = text_data_json.get('is_typing', False)
+                await self.channel_layer.group_send(
+                    self.room_group_name,
+                    {
+                        'type': 'typing_status',
+                        'user_id': self.user_id,
+                        'username': self.scope['user'].username,
+                        'is_typing': is_typing
+                    }
+                )
         except Exception as e:
-            logger.error(f"Unexpected error processing message: {str(e)}")
+            logger.error(f"Error in receive: {str(e)}")
             logger.error(traceback.format_exc())
+            raise
 
     async def chat_message(self, event):
         try:
-            logger.info(f"Broadcasting message {event.get('message_id')} in chat {self.chat_id}")
-            logger.debug(f"Event data: {event}")
+            logger.debug(f"Sending chat message: {event}")
+            message = event['message']
+            user_id = event['user_id']
+            username = event['username']
             
-            # Send message to WebSocket
             await self.send(text_data=json.dumps({
-                'message': event['message'],
-                'user_id': event['user_id'],
-                'username': event['username'],
-                'message_id': event.get('message_id')
+                'type': 'message',
+                'message': message,
+                'user_id': user_id,
+                'username': username
             }))
-            logger.info(f"Message broadcast complete in chat {self.chat_id}")
         except Exception as e:
-            logger.error(f"Failed to broadcast message: {str(e)}")
+            logger.error(f"Error in chat_message: {str(e)}")
             logger.error(traceback.format_exc())
+            raise
 
-    @database_sync_to_async
-    def get_chat(self):
+    async def user_status(self, event):
         try:
-            return Chat.objects.get(id=self.chat_id)
-        except Chat.DoesNotExist:
-            logger.error(f"Chat {self.chat_id} not found")
-            return None
+            logger.debug(f"Sending user status: {event}")
+            user_id = event['user_id']
+            status = event['status']
+            
+            await self.send(text_data=json.dumps({
+                'type': 'user_status',
+                'user_id': user_id,
+                'status': status
+            }))
         except Exception as e:
-            logger.error(f"Error getting chat: {str(e)}")
-            return None
+            logger.error(f"Error in user_status: {str(e)}")
+            logger.error(traceback.format_exc())
+            raise
+
+    async def typing_status(self, event):
+        try:
+            logger.debug(f"Sending typing status: {event}")
+            user_id = event['user_id']
+            username = event['username']
+            is_typing = event['is_typing']
+            
+            await self.send(text_data=json.dumps({
+                'type': 'typing_status',
+                'user_id': user_id,
+                'username': username,
+                'is_typing': is_typing
+            }))
+        except Exception as e:
+            logger.error(f"Error in typing_status: {str(e)}")
+            logger.error(traceback.format_exc())
+            raise
 
     @database_sync_to_async
-    def save_message(self, user_id, message):
+    def save_message(self, message):
         try:
-            user = User.objects.get(id=user_id)
+            logger.debug(f"Saving message to database: {message}")
             chat = Chat.objects.get(id=self.chat_id)
-            
-            logger.debug(f"Found user {user.username} and chat {chat.id}")
-            
-            message_obj = Message.objects.create(
+            Message.objects.create(
                 chat=chat,
-                sender=user,
+                sender=self.scope['user'],
                 content=message
             )
-            logger.info(f"Created message {message_obj.id} in chat {chat.id}")
-            return message_obj
-        except User.DoesNotExist:
-            logger.error(f"User {user_id} not found")
-            raise
-        except Chat.DoesNotExist:
-            logger.error(f"Chat {self.chat_id} not found")
-            raise
+            logger.debug("Message saved successfully")
         except Exception as e:
             logger.error(f"Error saving message: {str(e)}")
-            raise
-
-    @database_sync_to_async
-    def get_username(self, user_id):
-        try:
-            user = User.objects.get(id=user_id)
-            logger.debug(f"Found username {user.username} for user {user_id}")
-            return user.username
-        except User.DoesNotExist:
-            logger.error(f"User {user_id} not found")
-            raise
-        except Exception as e:
-            logger.error(f"Error getting username: {str(e)}")
+            logger.error(traceback.format_exc())
             raise 

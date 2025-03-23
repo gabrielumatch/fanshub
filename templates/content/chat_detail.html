@@ -34,6 +34,9 @@
                             <h5 class="mb-0">{{ other_user.username }}</h5>
                             <small class="text-muted">
                                 {% if other_user.is_creator %}Creator{% else %}Subscriber{% endif %}
+                                <span id="online-status" class="ms-2">
+                                    <span class="text-muted">● Offline</span>
+                                </span>
                             </small>
                         </div>
                     </div>
@@ -51,6 +54,9 @@
                     {% endfor %}
                 </div>
                 <div class="card-footer bg-white">
+                    <div id="typing-indicator" class="text-muted small mb-2" style="display: none;">
+                        {{ other_user.username }} is typing...
+                    </div>
                     <form id="chat-form" class="d-flex">
                         <input type="text" id="chat-message-input" class="form-control me-2" placeholder="Type a message...">
                         <button type="submit" class="btn btn-primary">Send</button>
@@ -60,78 +66,57 @@
         </div>
     </div>
 </div>
-
-<!-- Debug Info (hidden in production) -->
-{% if debug %}
-<div class="container mt-3">
-    <div class="alert alert-info">
-        <p><strong>Debug Info:</strong></p>
-        <p>Chat ID: {{ chat.id }}</p>
-        <p>Current User: {{ user.username }} (ID: {{ user.id }})</p>
-        <p>Other User: {{ other_user.username }} (ID: {{ other_user.id }})</p>
-    </div>
-</div>
-{% endif %}
 {% endblock %}
 
 {% block extra_js %}
 <script>
-// Debug logging
-function debugLog(message, data) {
-    if ({{ debug|yesno:"true,false" }}) {
-        console.log(`[Debug] ${message}:`, data);
-    }
-}
-
 const chatSocket = new WebSocket(
     (window.location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + window.location.host + '/ws/chat/{{ chat.id }}/'
 );
 
-debugLog('Connecting to WebSocket', {
-    url: (window.location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + window.location.host + '/ws/chat/{{ chat.id }}/',
-    chatId: '{{ chat.id }}'
-});
-
 chatSocket.onopen = function(e) {
-    debugLog('WebSocket connection established', e);
+    console.log('WebSocket connection established');
 };
 
 chatSocket.onmessage = function(e) {
-    debugLog('Received message', e.data);
-    
     const data = JSON.parse(e.data);
-    const messagesDiv = document.querySelector('.chat-messages');
-    const isCurrentUser = data.user_id === {{ user.id }};
     
-    debugLog('Processing message', {
-        userId: data.user_id,
-        currentUser: {{ user.id }},
-        isCurrentUser: isCurrentUser
-    });
-    
-    const messageHtml = `
-        <div class="message mb-3 ${isCurrentUser ? 'text-end' : ''}">
-            <div class="d-inline-block ${isCurrentUser ? 'bg-primary text-white' : 'bg-light'} rounded p-2">
+    if (data.type === 'message') {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message mb-3 ${data.user_id === {{ user.id }} ? 'text-end' : ''}`;
+        messageDiv.innerHTML = `
+            <div class="d-inline-block ${data.user_id === {{ user.id }} ? 'bg-primary text-white' : 'bg-light'} rounded p-2">
                 ${data.message}
             </div>
             <small class="text-muted d-block mt-1">
-                Just now
+                ${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}
             </small>
-        </div>
-    `;
-    
-    messagesDiv.insertAdjacentHTML('beforeend', messageHtml);
-    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        `;
+        document.querySelector('.chat-messages').appendChild(messageDiv);
+        document.querySelector('.chat-messages').scrollTop = document.querySelector('.chat-messages').scrollHeight;
+    } else if (data.type === 'user_status') {
+        const onlineStatus = document.getElementById('online-status');
+        if (data.user_id === {{ other_user.id }}) {
+            onlineStatus.innerHTML = data.status === 'online' 
+                ? '<span class="text-success">● Online</span>'
+                : '<span class="text-muted">● Offline</span>';
+        }
+    } else if (data.type === 'typing_status') {
+        const typingIndicator = document.getElementById('typing-indicator');
+        if (data.user_id === {{ other_user.id }}) {
+            typingIndicator.style.display = data.is_typing ? 'block' : 'none';
+        }
+    }
 };
 
 chatSocket.onclose = function(e) {
-    debugLog('WebSocket connection closed', e);
-    console.error('Chat socket closed unexpectedly');
+    console.log('WebSocket connection closed');
+    const onlineStatus = document.getElementById('online-status');
+    onlineStatus.innerHTML = '<span class="text-muted">● Offline</span>';
 };
 
 chatSocket.onerror = function(e) {
-    debugLog('WebSocket error', e);
-    console.error('Chat socket error:', e);
+    console.error('WebSocket error:', e);
 };
 
 document.querySelector('#chat-form').onsubmit = function(e) {
@@ -140,19 +125,34 @@ document.querySelector('#chat-form').onsubmit = function(e) {
     const message = messageInputDom.value;
     
     if (message.trim()) {
-        const data = {
-            'message': message,
-            'user_id': {{ user.id }}
-        };
-        
-        debugLog('Sending message', data);
-        
-        chatSocket.send(JSON.stringify(data));
+        chatSocket.send(JSON.stringify({
+            'type': 'message',
+            'message': message
+        }));
         messageInputDom.value = '';
     }
 };
 
-// Scroll to bottom of messages
-document.querySelector('.chat-messages').scrollTop = document.querySelector('.chat-messages').scrollHeight;
+// Typing indicator
+let typingTimeout;
+const messageInput = document.querySelector('#chat-message-input');
+
+messageInput.addEventListener('input', function() {
+    if (!typingTimeout) {
+        chatSocket.send(JSON.stringify({
+            'type': 'typing',
+            'is_typing': true
+        }));
+    }
+    
+    clearTimeout(typingTimeout);
+    typingTimeout = setTimeout(() => {
+        chatSocket.send(JSON.stringify({
+            'type': 'typing',
+            'is_typing': false
+        }));
+        typingTimeout = null;
+    }, 1000);
+});
 </script>
 {% endblock %} 
