@@ -3,7 +3,8 @@ from .views.subscriptions import (
     subscribe,
     cancel_subscription,
     subscription_confirmation,
-    stripe_webhook
+    stripe_webhook,
+    check_subscription
 )
 from .views.payment_methods import (
     list_payment_methods,
@@ -23,4 +24,5 @@ urlpatterns = [
     path('payment-methods/save/', save_payment_method, name='save_payment_method'),
     path('payment-methods/set-default/', set_default_payment_method, name='set_default_payment_method'),
     path('payment-methods/delete/', delete_payment_method, name='delete_payment_method'),
+    path('api/subscriptions/check/<str:subscription_id>/', check_subscription, name='check_subscription'),
 ] 

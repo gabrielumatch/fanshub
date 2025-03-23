@@ -10,12 +10,103 @@ from subscriptions.models import Subscription
 stripe.api_key = settings.STRIPE_SECRET_KEY
 
 @login_required
+def check_subscription(request, subscription_id):
+    """API endpoint to check subscription status"""
+    print(f"\n=== Checking subscription status for {subscription_id} ===")
+    
+    try:
+        # First check our database
+        print("Checking local database for subscription")
+        subscription = Subscription.objects.get(stripe_subscription_id=subscription_id)
+        print(f"Found subscription in database: {subscription.id}")
+        print(f"Subscription status: active={subscription.active}")
+        return JsonResponse({
+            'active': subscription.active
+        })
+    except Subscription.DoesNotExist:
+        print("Subscription not found in database, checking Stripe...")
+        try:
+            # If not in our database, check Stripe
+            print(f"Retrieving subscription from Stripe: {subscription_id}")
+            stripe_subscription = stripe.Subscription.retrieve(subscription_id)
+            print(f"Found subscription in Stripe. Status: {stripe_subscription.status}")
+            print(f"Stripe subscription metadata: {stripe_subscription.metadata}")
+            
+            # Check if the subscription is in a valid state
+            if stripe_subscription.status in ['active', 'trialing']:
+                print("Subscription is active or trialing, creating in database...")
+                # Create subscription in our database
+                creator_username = stripe_subscription.metadata['creator_username']
+                subscriber_id = stripe_subscription.metadata['subscriber_id']
+                
+                print(f"Looking up creator: {creator_username}")
+                creator = User.objects.get(username=creator_username)
+                print(f"Looking up subscriber: {subscriber_id}")
+                subscriber = User.objects.get(id=subscriber_id)
+                
+                # Calculate expiration date (1 month from now)
+                from django.utils import timezone
+                from datetime import timedelta
+                expires_at = timezone.now() + timedelta(days=30)
+                
+                print("Creating subscription in database")
+                subscription = Subscription.objects.create(
+                    subscriber=subscriber,
+                    creator=creator,
+                    stripe_subscription_id=subscription_id,
+                    active=True,
+                    expires_at=expires_at,
+                    price=creator.subscription_price,
+                    auto_renew=True
+                )
+                print(f"Created subscription in database: {subscription.id}")
+                
+                return JsonResponse({
+                    'active': True
+                })
+            elif stripe_subscription.status == 'incomplete':
+                print("Subscription is incomplete, payment still processing...")
+                # Payment is still processing
+                return JsonResponse({
+                    'active': False,
+                    'status': 'processing'
+                })
+            else:
+                print(f"Subscription is in invalid state: {stripe_subscription.status}")
+                # Subscription is in an invalid state
+                return JsonResponse({
+                    'active': False,
+                    'status': stripe_subscription.status
+                })
+                
+        except stripe.error.StripeError as e:
+            print(f"Stripe error: {str(e)}")
+            return JsonResponse({
+                'active': False,
+                'error': str(e)
+            }, status=400)
+        except Exception as e:
+            print(f"Unexpected error: {str(e)}")
+            return JsonResponse({
+                'active': False,
+                'error': str(e)
+            }, status=500)
+        
+        print("Subscription not found in Stripe")
+        return JsonResponse({
+            'active': False,
+            'status': 'not_found'
+        }, status=404)
+
+@login_required
 def subscribe(request, creator_username):
     """View to handle subscription to a creator"""
+    print(f"\n=== Starting subscription process for {creator_username} ===")
     creator = get_object_or_404(User, username=creator_username, is_creator=True)
     
     # Check if user is trying to subscribe to themselves
     if request.user == creator:
+        print("Error: User trying to subscribe to themselves")
         return JsonResponse({
             'success': False,
             'message': 'You cannot subscribe to yourself'
@@ -29,14 +120,18 @@ def subscribe(request, creator_username):
     ).first()
     
     if existing_subscription:
+        print(f"Error: User already subscribed (Subscription ID: {existing_subscription.id})")
         return JsonResponse({
             'success': False,
             'message': 'You are already subscribed to this creator'
         }, status=400)
     
     try:
+        print(f"Creating subscription for user {request.user.username} to creator {creator.username}")
+        
         # Create or get Stripe customer for subscriber
         if not request.user.stripe_customer_id:
+            print("Creating new Stripe customer for subscriber")
             customer = stripe.Customer.create(
                 email=request.user.email,
                 metadata={
@@ -46,12 +141,49 @@ def subscribe(request, creator_username):
             )
             request.user.stripe_customer_id = customer.id
             request.user.save()
+            print(f"Created Stripe customer: {customer.id}")
+        else:
+            print(f"Using existing Stripe customer: {request.user.stripe_customer_id}")
         
-        # Create payment intent
-        payment_intent = stripe.PaymentIntent.create(
-            amount=int(creator.subscription_price * 100),  # Convert to cents
-            currency='usd',
+        # Create or get Stripe product for creator
+        if not creator.stripe_product_id:
+            print("Creating new Stripe product for creator")
+            product = stripe.Product.create(
+                name=f"Subscription to {creator.username}",
+                metadata={
+                    'creator_id': creator.id,
+                    'creator_username': creator.username
+                }
+            )
+            creator.stripe_product_id = product.id
+            creator.save()
+            print(f"Created Stripe product: {product.id}")
+        else:
+            print(f"Using existing Stripe product: {creator.stripe_product_id}")
+        
+        # Create or get Stripe price for creator
+        if not creator.stripe_price_id:
+            print("Creating new Stripe price for creator")
+            price = stripe.Price.create(
+                product=creator.stripe_product_id,
+                unit_amount=int(creator.subscription_price * 100),  # Convert to cents
+                currency='usd',
+                recurring={'interval': 'month'}
+            )
+            creator.stripe_price_id = price.id
+            creator.save()
+            print(f"Created Stripe price: {price.id}")
+        else:
+            print(f"Using existing Stripe price: {creator.stripe_price_id}")
+        
+        # Create subscription
+        print("Creating Stripe subscription")
+        subscription = stripe.Subscription.create(
             customer=request.user.stripe_customer_id,
+            items=[{'price': creator.stripe_price_id}],
+            payment_behavior='default_incomplete',
+            payment_settings={'save_default_payment_method': 'on_subscription'},
+            expand=['latest_invoice.payment_intent'],
             metadata={
                 'creator_id': creator.id,
                 'creator_username': creator.username,
@@ -59,14 +191,18 @@ def subscribe(request, creator_username):
                 'subscriber_username': request.user.username
             }
         )
+        print(f"Created Stripe subscription: {subscription.id}")
+        print(f"Payment intent client secret: {subscription.latest_invoice.payment_intent.client_secret}")
         
         return render(request, 'subscriptions/subscribe.html', {
             'creator': creator,
-            'client_secret': payment_intent.client_secret,
-            'stripe_public_key': settings.STRIPE_PUBLIC_KEY
+            'client_secret': subscription.latest_invoice.payment_intent.client_secret,
+            'stripe_public_key': settings.STRIPE_PUBLIC_KEY,
+            'subscription_id': subscription.id
         })
         
     except Exception as e:
+        print(f"Error in subscribe view: {str(e)}")
         return JsonResponse({
             'success': False,
             'message': str(e)
@@ -137,18 +273,46 @@ def stripe_webhook(request):
     
     if event['type'] == 'payment_intent.succeeded':
         payment_intent = event['data']['object']
-        creator_username = payment_intent['metadata']['creator_username']
+        creator_id = payment_intent['metadata']['creator_id']
         subscriber_id = payment_intent['metadata']['subscriber_id']
         
-        creator = User.objects.get(username=creator_username)
-        subscriber = User.objects.get(id=subscriber_id)
-        
-        # Create subscription
-        subscription = Subscription.objects.create(
-            subscriber=subscriber,
-            creator=creator,
-            stripe_subscription_id=payment_intent['id'],
-            active=True
-        )
+        try:
+            subscriber = User.objects.get(id=subscriber_id)
+            creator = User.objects.get(id=creator_id)
+            
+            # Create subscription in Stripe
+            subscription = stripe.Subscription.create(
+                customer=subscriber.stripe_customer_id,
+                items=[{'price': creator.stripe_price_id}],
+                metadata={
+                    'creator_id': creator.id,
+                    'creator_username': creator.username,
+                    'subscriber_id': subscriber.id,
+                    'subscriber_username': subscriber.username
+                }
+            )
+            
+            # Create subscription in our database
+            db_subscription = Subscription.objects.create(
+                subscriber=subscriber,
+                creator=creator,
+                stripe_subscription_id=subscription.id,
+                active=True
+            )
+            
+            print(f"Created subscription in database: {db_subscription.id}")  # Debug log
+            
+        except Exception as e:
+            print(f"Error creating subscription: {str(e)}")  # Debug log
+            return JsonResponse({'error': str(e)}, status=500)
+    
+    elif event['type'] == 'customer.subscription.deleted':
+        subscription = event['data']['object']
+        try:
+            db_subscription = Subscription.objects.get(stripe_subscription_id=subscription['id'])
+            db_subscription.active = False
+            db_subscription.save()
+        except Subscription.DoesNotExist:
+            pass
     
     return JsonResponse({'status': 'success'}) 

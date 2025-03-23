@@ -91,8 +91,38 @@
             spinner.classList.add('d-none');
             buttonText.textContent = 'Subscribe Now';
         } else {
-            // Payment successful
-            window.location.href = "{% url 'subscriptions:subscription_confirmation' creator.username %}";
+            // Payment successful, wait for webhook to create subscription
+            const checkSubscription = async () => {
+                try {
+                    console.log('Checking subscription:', '{{ subscription_id }}');  // Debug log
+                    const response = await fetch(`/subscriptions/api/subscriptions/check/{{ subscription_id }}/`);
+                    console.log('Response status:', response.status);  // Debug log
+                    const data = await response.json();
+                    console.log('Response data:', data);  // Debug log
+                    
+                    if (data.active) {
+                        window.location.href = "{% url 'subscriptions:subscription_confirmation' creator.username %}";
+                    } else if (data.status === 'processing') {
+                        buttonText.textContent = 'Processing payment...';
+                        setTimeout(checkSubscription, 2000); // Check again in 2 seconds
+                    } else if (data.status === 'not_found') {
+                        buttonText.textContent = 'Creating subscription...';
+                        setTimeout(checkSubscription, 2000); // Check again in 2 seconds
+                    } else {
+                        const errorElement = document.getElementById('card-errors');
+                        errorElement.textContent = `Subscription error: ${data.status}`;
+                        errorElement.style.display = 'block';
+                        submitButton.disabled = false;
+                        spinner.classList.add('d-none');
+                        buttonText.textContent = 'Subscribe Now';
+                    }
+                } catch (error) {
+                    console.error('Error checking subscription:', error);
+                    setTimeout(checkSubscription, 2000);
+                }
+            };
+            
+            checkSubscription();
         }
     });
 </script>

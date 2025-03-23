@@ -14,6 +14,8 @@ class User(AbstractUser):
     is_creator = models.BooleanField(default=False)
     subscription_price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     stripe_account_id = models.CharField(max_length=255, blank=True, null=True)
+    stripe_product_id = models.CharField(max_length=255, blank=True, null=True)
+    stripe_price_id = models.CharField(max_length=255, blank=True, null=True)
     
     # User-specific fields
     date_of_birth = models.DateField(null=True, blank=True)
