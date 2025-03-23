@@ -20,8 +20,8 @@ def home(request):
             active=True
         ).values_list('creator_id', flat=True)
         
-        # Get posts from subscribed creators
-        posts = Post.objects.filter(creator_id__in=subscriptions).order_by('-created_at')
+        # Get posts from subscribed creators with prefetched media
+        posts = Post.objects.filter(creator_id__in=subscriptions).prefetch_related('media_files').order_by('-created_at')
         
         # If user has no subscriptions, show featured creators
         if not posts:

@@ -32,6 +32,21 @@ class Subscription(models.Model):
         unique_together = ('subscriber', 'creator')
         verbose_name = _('Subscription')
         verbose_name_plural = _('Subscriptions')
+        
+    def clean(self):
+        """Validate that there are no other active subscriptions between the same subscriber and creator"""
+        if self.active:
+            existing = Subscription.objects.filter(
+                subscriber=self.subscriber,
+                creator=self.creator,
+                active=True
+            ).exclude(pk=self.pk)
+            if existing.exists():
+                raise ValidationError('An active subscription already exists between this subscriber and creator.')
+    
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
 
 class PaymentHistory(models.Model):
     """

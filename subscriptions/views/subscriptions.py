@@ -6,6 +6,8 @@ from django.conf import settings
 import stripe
 from accounts.models import User
 from subscriptions.models import Subscription
+from django.utils import timezone
+from datetime import timedelta
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
 
@@ -45,8 +47,6 @@ def check_subscription(request, subscription_id):
                 subscriber = User.objects.get(id=subscriber_id)
                 
                 # Calculate expiration date (1 month from now)
-                from django.utils import timezone
-                from datetime import timedelta
                 expires_at = timezone.now() + timedelta(days=30)
                 
                 print("Creating subscription in database")
@@ -281,6 +281,17 @@ def stripe_webhook(request):
             subscriber = User.objects.get(id=subscriber_id)
             creator = User.objects.get(id=creator_id)
             
+            # Check for existing active subscription
+            existing_subscription = Subscription.objects.filter(
+                subscriber=subscriber,
+                creator=creator,
+                active=True
+            ).first()
+            
+            if existing_subscription:
+                print(f"Subscription already exists: {existing_subscription.id}")
+                return JsonResponse({'message': 'Subscription already exists'}, status=200)
+            
             # Create subscription in Stripe
             subscription = stripe.Subscription.create(
                 customer=subscriber.stripe_customer_id,
@@ -298,22 +309,16 @@ def stripe_webhook(request):
                 subscriber=subscriber,
                 creator=creator,
                 stripe_subscription_id=subscription.id,
-                active=True
+                active=True,
+                expires_at=timezone.now() + timedelta(days=30),
+                price=creator.subscription_price,
+                auto_renew=True
             )
             
             print(f"Created subscription in database: {db_subscription.id}")  # Debug log
             
         except Exception as e:
-            print(f"Error creating subscription: {str(e)}")  # Debug log
+            print(f"Error in webhook handler: {str(e)}")
             return JsonResponse({'error': str(e)}, status=500)
-    
-    elif event['type'] == 'customer.subscription.deleted':
-        subscription = event['data']['object']
-        try:
-            db_subscription = Subscription.objects.get(stripe_subscription_id=subscription['id'])
-            db_subscription.active = False
-            db_subscription.save()
-        except Subscription.DoesNotExist:
-            pass
     
     return JsonResponse({'status': 'success'}) 

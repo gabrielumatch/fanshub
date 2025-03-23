@@ -113,9 +113,9 @@
       <div class="card-body">
         <p class="card-text">{{ post.text }}</p>
 
-        {% if post.media.all %}
+        {% if post.media_files.all %}
         <div class="mt-3">
-          {% for media in post.media.all %}
+          {% for media in post.media_files.all %}
           <div class="mb-3">
             {% if media.media_type == 'image' %}
             <img
