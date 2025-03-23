@@ -100,7 +100,7 @@ def become_creator(request):
         return redirect('creator_dashboard')
     
     if request.method == 'POST':
-        form = CreatorProfileForm(request.POST, instance=request.user)
+        form = CreatorProfileForm(request.POST, request.FILES, instance=request.user)
         if form.is_valid():
             try:
                 # Create a customer for the creator
@@ -114,10 +114,15 @@ def become_creator(request):
                 
                 user = form.save(commit=False)
                 user.is_creator = True
+                user.is_verified = False  # New creators start unverified
                 user.stripe_customer_id = customer.id
                 user.save()
                 
-                messages.success(request, _('Congratulations! You are now a creator.'))
+                messages.success(request, _(
+                    'Your creator application has been submitted! '
+                    'Your account will be reviewed by our team. '
+                    'You will be notified once your account is verified.'
+                ))
                 return redirect('creator_dashboard')
             except stripe.error.StripeError as e:
                 messages.error(request, f"Stripe error: {str(e)}")

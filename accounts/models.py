@@ -16,6 +16,16 @@ class User(AbstractUser):
     stripe_account_id = models.CharField(max_length=255, blank=True, null=True)
     stripe_product_id = models.CharField(max_length=255, blank=True, null=True)
     stripe_price_id = models.CharField(max_length=255, blank=True, null=True)
+    verification_document = models.FileField(
+        upload_to='verification_documents/',
+        blank=True,
+        null=True,
+        help_text=_('Upload a valid ID document (passport, RG, ID) for verification')
+    )
+    is_verified = models.BooleanField(
+        default=False,
+        help_text=_('Indicates if the creator has been verified by admin')
+    )
     
     # User-specific fields
     date_of_birth = models.DateField(null=True, blank=True)

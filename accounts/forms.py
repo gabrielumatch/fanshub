@@ -51,19 +51,42 @@ class UserProfileForm(forms.ModelForm):
 
 class CreatorProfileForm(forms.ModelForm):
     """Form for creator-specific profile settings"""
+    bio = forms.CharField(
+        widget=forms.Textarea(attrs={'class': 'form-control', 'rows': 4}),
+        required=True,
+        help_text=_('Tell your potential subscribers about yourself')
+    )
     subscription_price = forms.DecimalField(
         max_digits=10,
         decimal_places=2,
         widget=forms.NumberInput(attrs={'class': 'form-control', 'min': '0', 'step': '0.01'}),
         help_text=_('Monthly subscription price for your content')
     )
+    verification_document = forms.FileField(
+        required=True,
+        widget=forms.FileInput(attrs={'class': 'form-control'}),
+        help_text=_('Please upload a valid ID document (passport, RG, ID) for verification. This is required for creator accounts.')
+    )
     
     class Meta:
         model = User
-        fields = ('subscription_price',)
+        fields = ('bio', 'subscription_price', 'verification_document')
         
     def clean_subscription_price(self):
         price = self.cleaned_data['subscription_price']
         if price < 0:
             raise forms.ValidationError(_('Price cannot be negative'))
-        return price 
+        return price
+        
+    def clean_verification_document(self):
+        document = self.cleaned_data.get('verification_document')
+        if document:
+            # Check file size (max 5MB)
+            if document.size > 5 * 1024 * 1024:
+                raise forms.ValidationError(_('File size must be no more than 5MB'))
+            
+            # Check file type (allow common document formats)
+            allowed_types = ['application/pdf', 'image/jpeg', 'image/png']
+            if document.content_type not in allowed_types:
+                raise forms.ValidationError(_('Only PDF, JPEG, and PNG files are allowed'))
+        return document 

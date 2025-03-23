@@ -12,7 +12,7 @@
           Set up your creator profile and start sharing exclusive content with your fans.
         </p>
 
-        <form method="post">
+        <form method="post" enctype="multipart/form-data">
           {% csrf_token %}
           {% if form.errors %}
           <div class="alert alert-danger">
@@ -46,21 +46,49 @@
             {% endif %}
           </div>
 
+          <div class="mb-4">
+            <label for="{{ form.verification_document.id_for_label }}" class="form-label">Verification Document</label>
+            {{ form.verification_document }}
+            {% if form.verification_document.help_text %}
+            <small class="form-text text-muted d-block">{{ form.verification_document.help_text }}</small>
+            {% endif %}
+            <div class="alert alert-info mt-2">
+              <h6 class="alert-heading">Document Requirements:</h6>
+              <ul class="mb-0">
+                <li>Must be a valid government-issued ID (passport, RG, ID)</li>
+                <li>File must be in PDF, JPEG, or PNG format</li>
+                <li>Maximum file size: 5MB</li>
+                <li>Document must be clear and legible</li>
+                <li>All corners of the document must be visible</li>
+              </ul>
+            </div>
+          </div>
+
           <div class="alert alert-info">
             <h5 class="alert-heading">Important Information</h5>
-            <p class="mb-0">
+            <p class="mb-2">
               By becoming a creator, you agree to:
             </p>
             <ul class="mb-0">
               <li>Provide accurate and complete information</li>
+              <li>Submit valid identification documents</li>
               <li>Comply with our terms of service and content guidelines</li>
               <li>Set up a Stripe account for receiving payments</li>
               <li>Maintain appropriate content for your subscribers</li>
             </ul>
           </div>
 
+          <div class="alert alert-warning">
+            <h5 class="alert-heading">Verification Process</h5>
+            <p class="mb-0">
+              After submission, our team will review your application and verify your documents. 
+              This process typically takes 1-2 business days. You will be notified once your account is verified.
+              Until then, you can set up your profile but won't be able to receive payments.
+            </p>
+          </div>
+
           <div class="d-grid gap-2">
-            <button type="submit" class="btn btn-primary">Become a Creator</button>
+            <button type="submit" class="btn btn-primary">Submit Application</button>
             <a href="{% url 'profile' %}" class="btn btn-outline-secondary">Cancel</a>
           </div>
         </form>

@@ -1,12 +1,28 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from django.utils.translation import gettext_lazy as _
+from django.utils.html import format_html
 from .models import User
+from subscriptions.models import Subscription
+
+class SubscriptionInline(admin.TabularInline):
+    model = Subscription
+    fk_name = 'creator'
+    readonly_fields = ('subscriber', 'active', 'price', 'created_at', 'expires_at', 'auto_renew')
+    can_delete = False
+    max_num = 0
+    extra = 0
+    
+    def has_add_permission(self, request, obj=None):
+        return False
+    
+    def has_change_permission(self, request, obj=None):
+        return False
 
 @admin.register(User)
 class CustomUserAdmin(UserAdmin):
-    list_display = ('username', 'email', 'is_creator', 'is_staff', 'is_active', 'date_joined')
-    list_filter = ('is_creator', 'is_staff', 'is_active', 'groups')
+    list_display = ('username', 'email', 'is_creator', 'is_verified', 'is_staff', 'is_active', 'date_joined')
+    list_filter = ('is_creator', 'is_verified', 'is_staff', 'is_active', 'groups')
     search_fields = ('username', 'email', 'bio')
     ordering = ('-date_joined',)
     
@@ -17,6 +33,11 @@ class CustomUserAdmin(UserAdmin):
             'fields': ('is_creator', 'subscription_price', 'stripe_account_id', 'stripe_product_id', 'stripe_price_id'),
             'classes': ('collapse',),
             'description': 'Settings specific to creator accounts'
+        }),
+        (_('Verification'), {
+            'fields': ('verification_document', 'is_verified'),
+            'classes': ('collapse',),
+            'description': 'Creator verification settings'
         }),
         (_('Payment Info'), {
             'fields': ('stripe_customer_id',),
@@ -43,3 +64,8 @@ class CustomUserAdmin(UserAdmin):
         if obj:  # editing an existing object
             return self.readonly_fields + ('username',)
         return self.readonly_fields
+    
+    def get_inlines(self, request, obj=None):
+        if obj and obj.is_creator:
+            return [SubscriptionInline]
+        return []
