@@ -198,7 +198,8 @@ def subscribe(request, creator_username):
             'creator': creator,
             'client_secret': subscription.latest_invoice.payment_intent.client_secret,
             'stripe_public_key': settings.STRIPE_PUBLIC_KEY,
-            'subscription_id': subscription.id
+            'subscription_id': subscription.id,
+            'debug': settings.DEBUG
         })
         
     except Exception as e:

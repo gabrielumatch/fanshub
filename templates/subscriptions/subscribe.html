@@ -24,6 +24,9 @@
                             <label for="card-element" class="form-label">Credit or debit card</label>
                             <div id="card-element" class="form-control" style="height: 40px; padding-top: 10px;"></div>
                             <div id="card-errors" class="invalid-feedback" role="alert"></div>
+                            {% if debug %}
+                            <small class="text-muted mt-2">Test card: 5555 5555 5555 4444</small>
+                            {% endif %}
                         </div>
 
                         <button type="submit" class="btn btn-primary w-100" id="submit-button">
@@ -45,7 +48,24 @@
 <script>
     const stripe = Stripe('{{ stripe_public_key }}');
     const elements = stripe.elements();
-    const card = elements.create('card');
+    const card = elements.create('card', {
+        {% if debug %}
+        value: '5555555555554444',
+        {% endif %}
+        style: {
+            base: {
+                fontSize: '16px',
+                color: '#424770',
+                '::placeholder': {
+                    color: '#aab7c4'
+                }
+            },
+            invalid: {
+                color: '#9e2146',
+                iconColor: '#9e2146'
+            }
+        }
+    });
     card.mount('#card-element');
 
     const form = document.getElementById('payment-form');

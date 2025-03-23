@@ -85,7 +85,7 @@
 
               {% if post.media_files.first %}
               <div class="mt-3">
-                {% if is_subscriber or not post.visibility == 'premium' or user == creator %}
+                {% if is_subscribed or not post.visibility == 'premium' or user == creator %}
                 {% if post.media_files.first.media_type == 'image' %}
                 <img
                   src="{{ post.media_files.first.file.url }}"
@@ -161,7 +161,7 @@
             <button class="btn btn-secondary w-100 disabled">
               This is your profile
             </button>
-            {% elif is_subscriber %}
+            {% elif is_subscribed %}
             <div class="alert alert-success mb-3">
               <i class="fas fa-check-circle me-2"></i> You're subscribed until
               {{ subscription.expires_at|date:"F j, Y" }}
@@ -252,6 +252,8 @@
     bottom: 0;
     background: rgba(0, 0, 0, 0.5);
     color: white;
+    text-align: center;
+    padding: 20px;
   }
 </style>
 {% endblock %} {% block extra_js %}
