@@ -4,6 +4,7 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'fanshub.settings')
 import json
 import logging
 import traceback
+import asyncio
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from .models import Chat, Message
@@ -23,6 +24,7 @@ User = get_user_model()
 
 # Store online users in memory
 online_users = {}
+offline_tasks = {}
 
 class ChatConsumer(AsyncWebsocketConsumer):
     async def connect(self):
@@ -42,6 +44,11 @@ class ChatConsumer(AsyncWebsocketConsumer):
             if self.chat_id not in online_users:
                 online_users[self.chat_id] = set()
             online_users[self.chat_id].add(self.user_id)
+            
+            # Cancel any existing offline task for this user
+            if self.user_id in offline_tasks:
+                offline_tasks[self.user_id].cancel()
+                del offline_tasks[self.user_id]
             
             # Notify others that user is online
             await self.channel_layer.group_send(
@@ -63,19 +70,23 @@ class ChatConsumer(AsyncWebsocketConsumer):
     async def disconnect(self, close_code):
         try:
             logger.debug(f"Disconnecting from chat room: {self.chat_id}")
-            # Remove user from online users set
-            if self.chat_id in online_users:
-                online_users[self.chat_id].discard(self.user_id)
             
-            # Notify others that user is offline
-            await self.channel_layer.group_send(
-                self.room_group_name,
-                {
-                    'type': 'user_status',
-                    'user_id': self.user_id,
-                    'status': 'offline'
-                }
-            )
+            # Create a task to mark user as offline after 10 seconds
+            async def mark_offline():
+                await asyncio.sleep(10)  # 10 second cooldown
+                if self.chat_id in online_users and self.user_id in online_users[self.chat_id]:
+                    online_users[self.chat_id].discard(self.user_id)
+                    await self.channel_layer.group_send(
+                        self.room_group_name,
+                        {
+                            'type': 'user_status',
+                            'user_id': self.user_id,
+                            'status': 'offline'
+                        }
+                    )
+            
+            # Store the task
+            offline_tasks[self.user_id] = asyncio.create_task(mark_offline())
             
             # Leave room group
             await self.channel_layer.group_discard(

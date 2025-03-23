@@ -70,8 +70,14 @@
 
 {% block extra_js %}
 <script>
+// Scroll to bottom of messages when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    const chatMessages = document.querySelector('.chat-messages');
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+});
+
 const chatSocket = new WebSocket(
-    (window.location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + window.location.host + '/ws/chat/{{ chat.id }}/'
+    'ws://' + window.location.hostname + ':8001/ws/chat/{{ chat.id }}/'
 );
 
 chatSocket.onopen = function(e) {
