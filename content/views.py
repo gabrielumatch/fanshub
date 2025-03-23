@@ -6,6 +6,10 @@ from django.http import JsonResponse
 from django.urls import reverse
 from django.db.models import Q, F, Max, Count
 from django.db.models.functions import Coalesce
+from django.views.decorators.http import require_POST
+from django.core.files.storage import default_storage
+from django.utils import timezone
+import os
 
 from .models import Post, Media, Like, Chat, Message
 from .forms import PostForm, MediaFormSet
@@ -337,3 +341,28 @@ def start_chat(request, username):
         chat = Chat.objects.create(creator=creator, subscriber=request.user)
     
     return redirect('chat_detail', chat_id=chat.id)
+
+@require_POST
+def upload_chat_media(request, chat_id):
+    try:
+        file = request.FILES.get('media')
+        if not file:
+            return JsonResponse({'error': 'No file provided'}, status=400)
+        
+        # Create a unique filename
+        file_extension = os.path.splitext(file.name)[1]
+        filename = f'chat_{chat_id}_{timezone.now().strftime("%Y%m%d_%H%M%S")}{file_extension}'
+        
+        # Save the file
+        path = default_storage.save(f'chat_media/{filename}', file)
+        url = default_storage.url(path)
+        
+        # Determine media type
+        media_type = 'image' if file_extension.lower() in ['.jpg', '.jpeg', '.png', '.gif'] else 'video'
+        
+        return JsonResponse({
+            'url': url,
+            'media_type': media_type
+        })
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)

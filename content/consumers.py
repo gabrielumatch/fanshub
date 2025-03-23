@@ -2,23 +2,17 @@ import os
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'fanshub.settings')
 
 import json
-import logging
-import traceback
 import asyncio
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from .models import Chat, Message
+from accounts.models import User
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ObjectDoesNotExist
-
-# Set up logging
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-handler = logging.StreamHandler()
-handler.setLevel(logging.DEBUG)
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-handler.setFormatter(formatter)
-logger.addHandler(handler)
+from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
+from django.utils import timezone
+from datetime import timedelta
 
 User = get_user_model()
 
@@ -29,10 +23,8 @@ offline_tasks = {}
 class ChatConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         try:
-            logger.debug(f"Attempting to connect to chat room: {self.scope['url_route']['kwargs']['chat_id']}")
             self.chat_id = self.scope['url_route']['kwargs']['chat_id']
             self.room_group_name = f'chat_{self.chat_id}'
-            self.user_id = self.scope['user'].id
             
             # Join room group
             await self.channel_layer.group_add(
@@ -43,117 +35,199 @@ class ChatConsumer(AsyncWebsocketConsumer):
             # Add user to online users set
             if self.chat_id not in online_users:
                 online_users[self.chat_id] = set()
-            online_users[self.chat_id].add(self.user_id)
+            online_users[self.chat_id].add(self.scope['user'].id)
             
             # Cancel any existing offline task for this user
-            if self.user_id in offline_tasks:
-                offline_tasks[self.user_id].cancel()
-                del offline_tasks[self.user_id]
+            if self.scope['user'].id in offline_tasks:
+                offline_tasks[self.scope['user'].id].cancel()
+                del offline_tasks[self.scope['user'].id]
             
             # Notify others that user is online
             await self.channel_layer.group_send(
                 self.room_group_name,
                 {
                     'type': 'user_status',
-                    'user_id': self.user_id,
+                    'user_id': self.scope['user'].id,
                     'status': 'online'
                 }
             )
             
             await self.accept()
-            logger.debug(f"Successfully connected to chat room: {self.chat_id}")
+            
+            # Mark user as online
+            await self.mark_online()
         except Exception as e:
-            logger.error(f"Error in connect: {str(e)}")
-            logger.error(traceback.format_exc())
             raise
 
     async def disconnect(self, close_code):
         try:
-            logger.debug(f"Disconnecting from chat room: {self.chat_id}")
-            
-            # Create a task to mark user as offline after 10 seconds
-            async def mark_offline():
-                await asyncio.sleep(10)  # 10 second cooldown
-                if self.chat_id in online_users and self.user_id in online_users[self.chat_id]:
-                    online_users[self.chat_id].discard(self.user_id)
-                    await self.channel_layer.group_send(
-                        self.room_group_name,
-                        {
-                            'type': 'user_status',
-                            'user_id': self.user_id,
-                            'status': 'offline'
-                        }
-                    )
-            
-            # Store the task
-            offline_tasks[self.user_id] = asyncio.create_task(mark_offline())
-            
             # Leave room group
             await self.channel_layer.group_discard(
                 self.room_group_name,
                 self.channel_name
             )
-            logger.debug(f"Successfully disconnected from chat room: {self.chat_id}")
+            
+            # Start offline cooldown
+            asyncio.create_task(self.mark_offline())
         except Exception as e:
-            logger.error(f"Error in disconnect: {str(e)}")
-            logger.error(traceback.format_exc())
             raise
 
-    async def receive(self, text_data):
+    async def receive(self, text_data=None, bytes_data=None):
         try:
-            logger.debug(f"Received message: {text_data}")
-            text_data_json = json.loads(text_data)
-            message_type = text_data_json.get('type', 'message')
+            if text_data:
+                # Handle text messages
+                data = json.loads(text_data)
+                message_type = data.get('type')
+                
+                if message_type == 'message':
+                    # Handle text message
+                    message = data.get('message', '')
+                    if message:
+                        new_message = await self.save_message(message)
+                        await self.channel_layer.group_send(
+                            self.room_group_name,
+                            {
+                                'type': 'chat_message',
+                                'message': new_message.content,
+                                'user_id': self.scope['user'].id,
+                                'username': self.scope['user'].username,
+                                'timestamp': new_message.created_at.isoformat()
+                            }
+                        )
+                
+                elif message_type == 'media_message':
+                    # Handle media message
+                    try:
+                        # Decode base64 data
+                        import base64
+                        file_data = base64.b64decode(data['data'])
+                        
+                        # Get file extension from content type
+                        content_type = data.get('content_type', '')
+                        
+                        if content_type.startswith('image/'):
+                            file_extension = '.jpg'  # Default to jpg for images
+                        elif content_type.startswith('video/'):
+                            file_extension = '.mp4'  # Default to mp4 for videos
+                        else:
+                            file_extension = self.get_file_extension(file_data[:4])
+                        
+                        if not file_extension:
+                            return
+                        
+                        # Create a unique filename
+                        filename = f'chat_{self.chat_id}_{timezone.now().strftime("%Y%m%d_%H%M%S")}{file_extension}'
+                        
+                        # Save the file
+                        file_path = await self.save_media_file(file_data, filename)
+                        
+                        # Determine media type
+                        media_type = 'image' if file_extension in ['.jpg', '.jpeg', '.png', '.gif'] else 'video'
+                        
+                        # Save message with media
+                        new_message = await self.save_message('', media_url=file_path, media_type=media_type)
+                        
+                        # Send media message to group
+                        await self.channel_layer.group_send(
+                            self.room_group_name,
+                            {
+                                'type': 'chat_message',
+                                'message': '',
+                                'media_url': file_path,
+                                'media_type': media_type,
+                                'user_id': self.scope['user'].id,
+                                'username': self.scope['user'].username,
+                                'timestamp': new_message.created_at.isoformat()
+                            }
+                        )
+                    except Exception as e:
+                        pass
+                
+                elif message_type == 'typing':
+                    # Handle typing status
+                    is_typing = data.get('is_typing', False)
+                    await self.channel_layer.group_send(
+                        self.room_group_name,
+                        {
+                            'type': 'typing_status',
+                            'user_id': self.scope['user'].id,
+                            'username': self.scope['user'].username,
+                            'is_typing': is_typing
+                        }
+                    )
             
-            if message_type == 'message':
-                message = text_data_json.get('message', '')
-                await self.save_message(message)
-                await self.channel_layer.group_send(
-                    self.room_group_name,
-                    {
-                        'type': 'chat_message',
-                        'message': message,
-                        'user_id': self.user_id,
-                        'username': self.scope['user'].username
-                    }
-                )
-            elif message_type == 'typing':
-                is_typing = text_data_json.get('is_typing', False)
-                await self.channel_layer.group_send(
-                    self.room_group_name,
-                    {
-                        'type': 'typing_status',
-                        'user_id': self.user_id,
-                        'username': self.scope['user'].username,
-                        'is_typing': is_typing
-                    }
-                )
+            elif bytes_data:
+                pass
+            
+        except json.JSONDecodeError:
+            pass
         except Exception as e:
-            logger.error(f"Error in receive: {str(e)}")
-            logger.error(traceback.format_exc())
+            raise
+
+    def get_file_extension(self, header_bytes):
+        # Check for image signatures
+        if header_bytes.startswith(b'\xFF\xD8\xFF'):  # JPEG
+            return '.jpg'
+        elif header_bytes.startswith(b'\x89PNG\r\n\x1a\n'):  # PNG
+            return '.png'
+        elif header_bytes.startswith(b'GIF87a') or header_bytes.startswith(b'GIF89a'):  # GIF
+            return '.gif'
+        # Check for video signatures
+        elif header_bytes.startswith(b'\x00\x00\x00') or header_bytes.startswith(b'ftyp'):  # MP4
+            return '.mp4'
+        return None
+    
+    @database_sync_to_async
+    def save_media_file(self, file_data, filename):
+        try:
+            # Create the chat_media directory if it doesn't exist
+            media_dir = 'chat_media'
+            if not default_storage.exists(media_dir):
+                default_storage.makedirs(media_dir)
+            
+            # Save the file using Django's storage
+            file_path = os.path.join(media_dir, filename)
+            path = default_storage.save(file_path, ContentFile(file_data))
+            return path
+        except Exception as e:
             raise
 
     async def chat_message(self, event):
         try:
-            logger.debug(f"Sending chat message: {event}")
-            message = event['message']
+            message = event.get('message', '')
             user_id = event['user_id']
-            username = event['username']
+            media_url = event.get('media_url')
+            media_type = event.get('media_type')
+            timestamp = event.get('timestamp')
+            
+            # Ensure the URL is absolute
+            if media_url and not media_url.startswith(('http://', 'https://')):
+                # Get the request scheme (http or https)
+                scheme = 'https' if self.scope.get('scheme') == 'https' else 'http'
+                # Get the host from headers
+                host = None
+                for header_name, header_value in self.scope.get('headers', []):
+                    if header_name == b'host':
+                        host = header_value.decode('utf-8')
+                        break
+                if not host:
+                    host = f"{self.scope['server'][0]}:{self.scope['server'][1]}"
+                # Convert the file path to a URL
+                media_url = f"{scheme}://{host}/media/{media_url}"
             
             await self.send(text_data=json.dumps({
                 'type': 'message',
                 'message': message,
                 'user_id': user_id,
-                'username': username
+                'media_url': media_url,
+                'media_type': media_type,
+                'timestamp': timestamp
             }))
         except Exception as e:
-            logger.error(f"Error in chat_message: {str(e)}")
-            logger.error(traceback.format_exc())
             raise
 
     async def user_status(self, event):
         try:
-            logger.debug(f"Sending user status: {event}")
             user_id = event['user_id']
             status = event['status']
             
@@ -163,13 +237,10 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 'status': status
             }))
         except Exception as e:
-            logger.error(f"Error in user_status: {str(e)}")
-            logger.error(traceback.format_exc())
             raise
 
     async def typing_status(self, event):
         try:
-            logger.debug(f"Sending typing status: {event}")
             user_id = event['user_id']
             username = event['username']
             is_typing = event['is_typing']
@@ -181,22 +252,36 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 'is_typing': is_typing
             }))
         except Exception as e:
-            logger.error(f"Error in typing_status: {str(e)}")
-            logger.error(traceback.format_exc())
             raise
 
     @database_sync_to_async
-    def save_message(self, message):
+    def save_message(self, message, media_url=None, media_type=None):
         try:
-            logger.debug(f"Saving message to database: {message}")
             chat = Chat.objects.get(id=self.chat_id)
-            Message.objects.create(
+            return Message.objects.create(
                 chat=chat,
                 sender=self.scope['user'],
-                content=message
+                content=message,
+                media=media_url,
+                media_type=media_type
             )
-            logger.debug("Message saved successfully")
         except Exception as e:
-            logger.error(f"Error saving message: {str(e)}")
-            logger.error(traceback.format_exc())
-            raise 
+            raise
+
+    @database_sync_to_async
+    def mark_online(self):
+        user = self.scope['user']
+        user.is_online = True
+        user.last_seen = timezone.now()
+        user.save()
+
+    async def mark_offline(self):
+        await asyncio.sleep(10)  # 10 second cooldown
+        await self.mark_offline_db()
+
+    @database_sync_to_async
+    def mark_offline_db(self):
+        user = self.scope['user']
+        user.is_online = False
+        user.last_seen = timezone.now()
+        user.save() 

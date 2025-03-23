@@ -180,8 +180,10 @@ class Chat(models.Model):
 
 class Message(models.Model):
     chat = models.ForeignKey(Chat, on_delete=models.CASCADE, related_name='messages')
-    sender = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='sent_messages')
-    content = models.TextField()
+    sender = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    content = models.TextField(blank=True)
+    media = models.FileField(upload_to='chat_media/', null=True, blank=True)
+    media_type = models.CharField(max_length=10, choices=[('image', 'Image'), ('video', 'Video')], null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     is_read = models.BooleanField(default=False)
 
@@ -189,7 +191,7 @@ class Message(models.Model):
         ordering = ['created_at']
 
     def __str__(self):
-        return f"Message from {self.sender.username} in {self.chat}"
+        return f'{self.sender.username}: {self.content[:50]}'
 
     def mark_as_read(self):
         self.is_read = True

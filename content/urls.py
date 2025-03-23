@@ -15,4 +15,5 @@ urlpatterns = [
     path('chats/', views.chat_list, name='chat_list'),
     path('chats/<str:chat_id>/', views.chat_detail, name='chat_detail'),
     path('chats/start/<str:username>/', views.start_chat, name='start_chat'),
+    path('chat/<int:chat_id>/upload/', views.upload_chat_media, name='upload_chat_media'),
 ] 

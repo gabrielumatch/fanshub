@@ -14,6 +14,7 @@ services:
     command: sh -c "python manage.py runserver 0.0.0.0:8000 & python -m daphne -b 0.0.0.0 -p 8001 fanshub.asgi_dev:application"
     volumes:
       - .:/app
+      - media_data:/app/media
     ports:
       - "8000:8000"
       - "8001:8001"
@@ -28,4 +29,5 @@ services:
     restart: always
 
 volumes:
-  redis_data: 
+  redis_data:
+  media_data: 

@@ -41,12 +41,29 @@
                         </div>
                     </div>
                 </div>
-                <div class="card-body chat-messages" style="height: 400px; overflow-y: auto;">
+                <div class="card-body chat-messages" style="height: 400px; overflow-y: auto;" 
+                     data-current-user="{{ user.id }}" 
+                     data-other-user="{{ other_user.id }}">
                     {% for message in messages %}
                     <div class="message mb-3 {% if message.sender == user %}text-end{% endif %}">
+                        {% if message.media %}
+                            {% if message.media_type == 'image' %}
+                            <div class="d-inline-block {% if message.sender == user %}bg-primary text-white{% else %}bg-light{% endif %} rounded p-2">
+                                <img src="{{ message.media.url }}" class="chat-media" alt="Image message" onerror="this.onerror=null; this.src='/static/images/error-placeholder.png';">
+                            </div>
+                            {% elif message.media_type == 'video' %}
+                            <div class="d-inline-block {% if message.sender == user %}bg-primary text-white{% else %}bg-light{% endif %} rounded p-2">
+                                <video controls class="chat-media">
+                                    <source src="{{ message.media.url }}" type="video/mp4">
+                                    Your browser does not support the video tag.
+                                </video>
+                            </div>
+                            {% endif %}
+                        {% else %}
                         <div class="d-inline-block {% if message.sender == user %}bg-primary text-white{% else %}bg-light{% endif %} rounded p-2">
                             {{ message.content }}
                         </div>
+                        {% endif %}
                         <small class="text-muted d-block mt-1">
                             {{ message.created_at|date:"g:i A" }}
                         </small>
@@ -54,17 +71,23 @@
                     {% endfor %}
                 </div>
                 <div class="card-footer bg-white">
-                    <div id="typing-indicator" class="typing-indicator" style="display: none;">
-                        <div class="typing-dots">
-                            <span></span>
-                            <span></span>
-                            <span></span>
+                    <form id="chat-form" class="d-flex flex-column">
+                        <div class="d-flex align-items-center">
+                            <label for="media-upload" class="btn btn-outline-primary me-2">
+                                <i class="bi bi-paperclip"></i>
+                            </label>
+                            <input type="file" id="media-upload" class="d-none" accept="image/*,video/*">
+                            <input type="text" id="chat-message-input" class="form-control me-2" placeholder="Type a message...">
+                            <button type="submit" class="btn btn-primary">Send</button>
                         </div>
-                        <small class="text-muted ms-2">{{ other_user.username }} is typing...</small>
-                    </div>
-                    <form id="chat-form" class="d-flex">
-                        <input type="text" id="chat-message-input" class="form-control me-2" placeholder="Type a message...">
-                        <button type="submit" class="btn btn-primary">Send</button>
+                        <div id="media-preview" class="mt-2" style="display: none;">
+                            <div class="d-flex align-items-center">
+                                <img id="preview-image" class="img-thumbnail me-2" style="max-height: 100px;">
+                                <button type="button" class="btn btn-sm btn-outline-danger" id="remove-media">
+                                    <i class="bi bi-x"></i>
+                                </button>
+                            </div>
+                        </div>
                     </form>
                 </div>
             </div>
@@ -73,14 +96,18 @@
 </div>
 
 <style>
-.typing-indicator {
-    display: flex;
-    align-items: center;
-    padding: 8px 12px;
+.chat-media {
+    max-width: 300px;
+    max-height: 300px;
+    border-radius: 8px;
+}
+
+.typing-bubble {
+    display: inline-block;
     background: #f8f9fa;
     border-radius: 20px;
-    margin-bottom: 10px;
-    width: fit-content;
+    padding: 8px 12px;
+    margin-bottom: 3px;
 }
 
 .typing-dots {
@@ -119,6 +146,9 @@
 
 {% block extra_js %}
 <script>
+const currentUser = parseInt(document.querySelector('.chat-messages').dataset.currentUser);
+const otherUser = parseInt(document.querySelector('.chat-messages').dataset.otherUser);
+
 // Scroll to bottom of messages when page loads
 document.addEventListener('DOMContentLoaded', function() {
     const chatMessages = document.querySelector('.chat-messages');
@@ -130,63 +160,172 @@ const chatSocket = new WebSocket(
 );
 
 chatSocket.onopen = function(e) {
-    console.log('WebSocket connection established');
 };
 
 chatSocket.onmessage = function(e) {
-    const data = JSON.parse(e.data);
-    
-    if (data.type === 'message') {
-        const messageDiv = document.createElement('div');
-        messageDiv.className = `message mb-3 ${data.user_id === {{ user.id }} ? 'text-end' : ''}`;
-        messageDiv.innerHTML = `
-            <div class="d-inline-block ${data.user_id === {{ user.id }} ? 'bg-primary text-white' : 'bg-light'} rounded p-2">
-                ${data.message}
-            </div>
-            <small class="text-muted d-block mt-1">
-                ${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}
-            </small>
-        `;
-        document.querySelector('.chat-messages').appendChild(messageDiv);
-        document.querySelector('.chat-messages').scrollTop = document.querySelector('.chat-messages').scrollHeight;
-    } else if (data.type === 'user_status') {
-        const onlineStatus = document.getElementById('online-status');
-        if (data.user_id === {{ other_user.id }}) {
-            onlineStatus.innerHTML = data.status === 'online' 
-                ? '<span class="text-success">● Online</span>'
-                : '<span class="text-muted">● Offline</span>';
+    let data;
+    try {
+        if (e.data instanceof Blob) {
+            return;
+        } else {
+            data = JSON.parse(e.data);
+            const messagesContainer = document.querySelector('.chat-messages');
+            
+            if (data.type === 'message') {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `message mb-3 ${data.user_id === currentUser ? 'text-end' : ''}`;
+                
+                let messageContent = '';
+                if (data.media_url) {
+                    if (data.media_type === 'image') {
+                        messageContent = `
+                            <div class="d-inline-block ${data.user_id === currentUser ? 'bg-primary text-white' : 'bg-light'} rounded p-2">
+                                <img src="${data.media_url}" class="chat-media" alt="Image message" 
+                                    onerror="this.onerror=null; this.src='/static/images/error-placeholder.png';">
+                            </div>
+                        `;
+                    } else if (data.media_type === 'video') {
+                        messageContent = `
+                            <div class="d-inline-block ${data.user_id === currentUser ? 'bg-primary text-white' : 'bg-light'} rounded p-2">
+                                <video controls class="chat-media">
+                                    <source src="${data.media_url}" type="video/mp4">
+                                    Your browser does not support the video tag.
+                                </video>
+                            </div>
+                        `;
+                    }
+                } else {
+                    messageContent = `
+                        <div class="d-inline-block ${data.user_id === currentUser ? 'bg-primary text-white' : 'bg-light'} rounded p-2">
+                            ${data.message}
+                        </div>
+                    `;
+                }
+                
+                messageDiv.innerHTML = messageContent + `
+                    <small class="text-muted d-block mt-1">
+                        ${data.timestamp ? new Date(data.timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true }) : new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}
+                    </small>
+                `;
+                
+                messagesContainer.appendChild(messageDiv);
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            } else if (data.type === 'user_status') {
+                const onlineStatus = document.getElementById('online-status');
+                if (data.user_id === otherUser) {
+                    onlineStatus.innerHTML = data.status === 'online' 
+                        ? '<span class="text-success">● Online</span>'
+                        : '<span class="text-muted">● Offline</span>';
+                }
+            } else if (data.type === 'typing_status') {
+                const typingIndicator = document.getElementById('typing-indicator');
+                if (data.user_id === otherUser) {
+                    if (data.is_typing) {
+                        if (!typingIndicator) {
+                            const indicator = document.createElement('div');
+                            indicator.id = 'typing-indicator';
+                            indicator.className = 'message mb-3';
+                            indicator.innerHTML = `
+                                <div class="typing-bubble">
+                                    <div class="typing-dots">
+                                        <span></span>
+                                        <span></span>
+                                        <span></span>
+                                    </div>
+                                </div>
+                            `;
+                            document.querySelector('.chat-messages').appendChild(indicator);
+                        }
+                    } else if (typingIndicator) {
+                        typingIndicator.remove();
+                    }
+                }
+            }
         }
-    } else if (data.type === 'typing_status') {
-        const typingIndicator = document.getElementById('typing-indicator');
-        if (data.user_id === {{ other_user.id }}) {
-            typingIndicator.style.display = data.is_typing ? 'flex' : 'none';
-        }
+    } catch (error) {
     }
 };
 
 chatSocket.onclose = function(e) {
-    console.log('WebSocket connection closed');
     const onlineStatus = document.getElementById('online-status');
     onlineStatus.innerHTML = '<span class="text-muted">● Offline</span>';
 };
 
 chatSocket.onerror = function(e) {
-    console.error('WebSocket error:', e);
 };
 
-document.querySelector('#chat-form').onsubmit = function(e) {
-    e.preventDefault();
-    const messageInputDom = document.querySelector('#chat-message-input');
-    const message = messageInputDom.value;
-    
-    if (message.trim()) {
-        chatSocket.send(JSON.stringify({
-            'type': 'message',
-            'message': message
-        }));
-        messageInputDom.value = '';
+// Handle media upload
+const mediaUpload = document.getElementById('media-upload');
+const mediaPreview = document.getElementById('media-preview');
+const previewImage = document.getElementById('preview-image');
+const removeMedia = document.getElementById('remove-media');
+let selectedFile = null;
+
+mediaUpload.addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (file) {
+        selectedFile = file;
+        if (file.type.startsWith('image/')) {
+            previewImage.src = URL.createObjectURL(file);
+            mediaPreview.style.display = 'block';
+        } else if (file.type.startsWith('video/')) {
+            // For video, we'll just show the file name
+            previewImage.src = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0OCIgaGVpZ2h0PSI0OCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiMwMDAiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNMjMgNy02IDV2N2w2IDVWN3oiLz48L3N2Zz4=';
+            mediaPreview.style.display = 'block';
+        }
     }
-};
+});
+
+removeMedia.addEventListener('click', function() {
+    selectedFile = null;
+    mediaPreview.style.display = 'none';
+    mediaUpload.value = '';
+});
+
+// Handle form submission
+document.getElementById('chat-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const messageInput = document.getElementById('chat-message-input');
+    const mediaInput = document.getElementById('media-upload');
+    const message = messageInput.value.trim();
+    const mediaFile = mediaInput.files[0];
+    
+    try {
+        if (mediaFile) {
+            // Handle media file
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const base64Data = e.target.result.split(',')[1];
+                const messageData = {
+                    type: 'media_message',
+                    data: base64Data,
+                    content_type: mediaFile.type
+                };
+                chatSocket.send(JSON.stringify(messageData));
+            };
+            reader.readAsDataURL(mediaFile);
+        } else if (message) {
+            // Handle text message
+            const messageData = {
+                type: 'message',
+                message: message
+            };
+            chatSocket.send(JSON.stringify(messageData));
+        }
+        
+        // Clear inputs
+        messageInput.value = '';
+        mediaInput.value = '';
+        document.getElementById('media-preview').style.display = 'none';
+    } catch (error) {
+        alert('Failed to send message. Please try again.');
+    }
+});
+
+// Remove duplicate event handlers
+document.querySelector('#chat-form').onsubmit = null;
+document.querySelector('#media-upload').onchange = null;
 
 // Typing indicator
 let typingTimeout;
@@ -208,6 +347,25 @@ messageInput.addEventListener('input', function() {
         }));
         typingTimeout = null;
     }, 1000);
+});
+
+// Handle file upload
+document.getElementById('media-upload').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Show preview
+    const preview = document.getElementById('media-preview');
+    if (file.type.startsWith('image/')) {
+        preview.innerHTML = `<img src="${URL.createObjectURL(file)}" class="img-fluid rounded">`;
+    } else if (file.type.startsWith('video/')) {
+        preview.innerHTML = `
+            <video class="img-fluid rounded" controls>
+                <source src="${URL.createObjectURL(file)}" type="${file.type}">
+            </video>
+        `;
+    }
+    preview.style.display = 'block';
 });
 </script>
 {% endblock %} 
