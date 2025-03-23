@@ -9,5 +9,19 @@ services:
       - redis_data:/data
     command: redis-server --appendonly yes
 
+  web:
+    build: .
+    command: python -m daphne -b 0.0.0.0 -p 8000 fanshub.asgi:application
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      - redis
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - DJANGO_SETTINGS_MODULE=fanshub.settings
+      - DEBUG=True
+
 volumes:
   redis_data: 

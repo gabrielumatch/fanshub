@@ -60,18 +60,54 @@
         </div>
     </div>
 </div>
+
+<!-- Debug Info (hidden in production) -->
+{% if debug %}
+<div class="container mt-3">
+    <div class="alert alert-info">
+        <p><strong>Debug Info:</strong></p>
+        <p>Chat ID: {{ chat.id }}</p>
+        <p>Current User: {{ user.username }} (ID: {{ user.id }})</p>
+        <p>Other User: {{ other_user.username }} (ID: {{ other_user.id }})</p>
+    </div>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}
 <script>
+// Debug logging
+function debugLog(message, data) {
+    if ({{ debug|yesno:"true,false" }}) {
+        console.log(`[Debug] ${message}:`, data);
+    }
+}
+
 const chatSocket = new WebSocket(
-    'ws://' + window.location.host + '/ws/chat/{{ chat.id }}/'
+    (window.location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + window.location.host + '/ws/chat/{{ chat.id }}/'
 );
 
+debugLog('Connecting to WebSocket', {
+    url: (window.location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + window.location.host + '/ws/chat/{{ chat.id }}/',
+    chatId: '{{ chat.id }}'
+});
+
+chatSocket.onopen = function(e) {
+    debugLog('WebSocket connection established', e);
+};
+
 chatSocket.onmessage = function(e) {
+    debugLog('Received message', e.data);
+    
     const data = JSON.parse(e.data);
     const messagesDiv = document.querySelector('.chat-messages');
     const isCurrentUser = data.user_id === {{ user.id }};
+    
+    debugLog('Processing message', {
+        userId: data.user_id,
+        currentUser: {{ user.id }},
+        isCurrentUser: isCurrentUser
+    });
     
     const messageHtml = `
         <div class="message mb-3 ${isCurrentUser ? 'text-end' : ''}">
@@ -89,7 +125,13 @@ chatSocket.onmessage = function(e) {
 };
 
 chatSocket.onclose = function(e) {
+    debugLog('WebSocket connection closed', e);
     console.error('Chat socket closed unexpectedly');
+};
+
+chatSocket.onerror = function(e) {
+    debugLog('WebSocket error', e);
+    console.error('Chat socket error:', e);
 };
 
 document.querySelector('#chat-form').onsubmit = function(e) {
@@ -98,10 +140,14 @@ document.querySelector('#chat-form').onsubmit = function(e) {
     const message = messageInputDom.value;
     
     if (message.trim()) {
-        chatSocket.send(JSON.stringify({
+        const data = {
             'message': message,
             'user_id': {{ user.id }}
-        }));
+        };
+        
+        debugLog('Sending message', data);
+        
+        chatSocket.send(JSON.stringify(data));
         messageInputDom.value = '';
     }
 };

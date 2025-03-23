@@ -4,9 +4,10 @@ from django.contrib import messages
 from django.utils.translation import gettext_lazy as _
 from django.http import JsonResponse
 from django.urls import reverse
-from django.db.models import Q
+from django.db.models import Q, F, Max, Count
+from django.db.models.functions import Coalesce
 
-from .models import Post, Media, Like, Chat
+from .models import Post, Media, Like, Chat, Message
 from .forms import PostForm, MediaFormSet
 from accounts.models import User
 from subscriptions.models import Subscription
@@ -265,59 +266,74 @@ def like_post(request, post_id):
 
 @login_required
 def chat_list(request):
-    """View all chats for the current user"""
-    if request.user.is_creator:
-        # For creators, show chats with subscribers
-        chats = Chat.objects.filter(creator=request.user)
-    else:
-        # For subscribers, show chats with creators
-        chats = Chat.objects.filter(subscriber=request.user)
+    """List all chats for the current user"""
+    # Get all chats where user is either creator or subscriber
+    chats = Chat.objects.filter(
+        Q(creator=request.user) | Q(subscriber=request.user)
+    ).select_related('creator', 'subscriber').annotate(
+        last_message_time=Max('messages__created_at'),
+        unread_count=Count(
+            'messages',
+            filter=Q(messages__is_read=False) & ~Q(messages__sender=request.user)
+        )
+    ).order_by(Coalesce('last_message_time', F('created_at')).desc())
     
-    # Get unread message counts for each chat
-    for chat in chats:
-        chat.unread_count = chat.messages.filter(is_read=False).exclude(sender=request.user).count()
-    
-    return render(request, 'content/chat_list.html', {'chats': chats})
+    context = {
+        'chats': chats,
+        'is_creator': request.user.is_creator
+    }
+    return render(request, 'content/chat_list.html', context)
 
 @login_required
 def chat_detail(request, chat_id):
     """View a specific chat"""
     chat = get_object_or_404(Chat, id=chat_id)
     
-    # Check if user has permission to view this chat
-    if request.user != chat.creator and request.user != chat.subscriber:
-        raise Http404("You don't have permission to view this chat")
+    # Check if user is part of this chat
+    if request.user not in [chat.creator, chat.subscriber]:
+        messages.error(request, _('You do not have permission to view this chat.'))
+        return redirect('chat_list')
     
-    # Mark messages as read
-    chat.messages.filter(is_read=False).exclude(sender=request.user).update(is_read=True)
-    
-    # Get the other user in the chat
+    # Get the other user
     other_user = chat.subscriber if request.user == chat.creator else chat.creator
+    
+    # Mark unread messages as read
+    Message.objects.filter(
+        chat=chat,
+        sender=other_user,
+        is_read=False
+    ).update(is_read=True)
+    
+    # Get messages with sender info
+    messages_list = Message.objects.filter(chat=chat).select_related('sender').order_by('created_at')
     
     context = {
         'chat': chat,
+        'messages': messages_list,
         'other_user': other_user,
-        'messages': chat.messages.all(),
+        'debug': True  # Enable debug mode for development
     }
-    
     return render(request, 'content/chat_detail.html', context)
 
 @login_required
 def start_chat(request, username):
-    """Start a new chat with a user"""
-    other_user = get_object_or_404(User, username=username)
+    """Start a new chat with a creator"""
+    creator = get_object_or_404(User, username=username, is_creator=True)
     
     # Check if chat already exists
-    chat = Chat.objects.filter(
-        (Q(creator=request.user, subscriber=other_user) |
-         Q(creator=other_user, subscriber=request.user))
+    existing_chat = Chat.objects.filter(
+        (Q(creator=creator) & Q(subscriber=request.user)) |
+        (Q(creator=request.user) & Q(subscriber=creator))
     ).first()
     
-    if not chat:
-        # Create new chat
-        if request.user.is_creator:
-            chat = Chat.objects.create(creator=request.user, subscriber=other_user)
-        else:
-            chat = Chat.objects.create(creator=other_user, subscriber=request.user)
+    if existing_chat:
+        return redirect('chat_detail', chat_id=existing_chat.id)
+    
+    # Create new chat
+    if request.user.is_creator:
+        # If both users are creators, the initiator becomes the creator in the chat
+        chat = Chat.objects.create(creator=request.user, subscriber=creator)
+    else:
+        chat = Chat.objects.create(creator=creator, subscriber=request.user)
     
     return redirect('chat_detail', chat_id=chat.id)
