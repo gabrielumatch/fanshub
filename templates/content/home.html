@@ -135,11 +135,73 @@
         {% endif %}
       </div>
       <div class="card-footer bg-white">
-        <div class="d-flex justify-content-between">
-          <a href="{% url 'post_detail' post.id %}" class="text-decoration-none"
-            >View Post</a
-          >
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <div>
+            <button class="btn btn-outline-primary btn-sm me-2" data-action="like" data-post-id="{{ post.id }}">
+              <i class="bi bi-heart{% if post.is_liked %} text-danger{% endif %}"></i>
+              <span id="like-count-{{ post.id }}">{{ post.likes.count }}</span>
+            </button>
+            <button class="btn btn-outline-secondary btn-sm" data-action="comment" data-post-id="{{ post.id }}">
+              <i class="bi bi-chat"></i>
+              <span>{{ post.comments.count }}</span>
+            </button>
+          </div>
+          <a href="{% url 'post_detail' post.id %}" class="text-decoration-none text-muted small">
+            View all comments
+          </a>
         </div>
+
+        <!-- First few comments -->
+        {% if post.comments.all %}
+        <div class="comments-section">
+          {% for comment in post.comments.all|slice:":3" %}
+          <div class="d-flex align-items-start mb-2">
+            {% if comment.user.profile_picture %}
+            <img
+              src="{{ comment.user.profile_picture.url }}"
+              class="avatar-small me-2"
+              alt="{{ comment.user.username }}"
+            />
+            {% else %}
+            <div
+              class="bg-secondary avatar-small text-white d-flex align-items-center justify-content-center me-2"
+            >
+              {{ comment.user.username|first|upper }}
+            </div>
+            {% endif %}
+            <div class="flex-grow-1">
+              <div class="bg-light rounded p-2">
+                <span class="fw-bold">{{ comment.user.username }}</span>
+                {{ comment.content }}
+              </div>
+              <small class="text-muted">{{ comment.created_at|timesince }} ago</small>
+            </div>
+          </div>
+          {% endfor %}
+          {% if post.comments.count > 3 %}
+          <div class="text-center">
+            <a href="{% url 'post_detail' post.id %}" class="text-decoration-none text-muted small">
+              View all {{ post.comments.count }} comments
+            </a>
+          </div>
+          {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- Comment form -->
+        {% if user.is_authenticated %}
+        <form method="post" action="{% url 'add_comment' post.id %}" class="mt-2">
+          {% csrf_token %}
+          <div class="input-group">
+            <input type="text" class="form-control form-control-sm" name="content" placeholder="Write a comment..." required>
+            <button type="submit" class="btn btn-primary btn-sm">Post</button>
+          </div>
+        </form>
+        {% else %}
+        <div class="text-center mt-2">
+          <a href="{% url 'login' %}" class="text-decoration-none text-muted small">Login to comment</a>
+        </div>
+        {% endif %}
       </div>
     </div>
     {% endfor %}
@@ -203,3 +265,44 @@
   >
 </div>
 {% endif %} {% endif %} {% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  document.querySelectorAll('[data-action]').forEach(button => {
+    button.addEventListener('click', function(e) {
+      e.preventDefault();
+      const postId = this.dataset.postId;
+      if (this.dataset.action === 'like') {
+        likePost(postId);
+      } else if (this.dataset.action === 'comment') {
+        // Focus the comment input for this post
+        const commentForm = this.closest('.card-footer').querySelector('input[name="content"]');
+        if (commentForm) {
+          commentForm.focus();
+        }
+      }
+    });
+  });
+});
+
+function likePost(postId) {
+  fetch(`/api/posts/${postId}/like/`, {
+    method: 'POST',
+    headers: {
+      'X-CSRFToken': '{{ csrf_token }}',
+      'Content-Type': 'application/json',
+    },
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      const likeCount = document.getElementById(`like-count-${postId}`);
+      likeCount.textContent = data.likes_count;
+      const heartIcon = likeCount.previousElementSibling;
+      heartIcon.classList.toggle('text-danger');
+    }
+  });
+}
+</script>
+{% endblock %}
